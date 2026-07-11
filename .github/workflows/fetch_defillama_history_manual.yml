@@ -1,0 +1,59 @@
+name: Fetch DeFiLlama stablecoin and DEX history
+run-name: DeFiLlama truth-layer history — ${{ github.run_id }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: defillama-truth-layer-manual
+  cancel-in-progress: false
+
+jobs:
+  fetch-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch and normalize public DeFiLlama history
+        id: collector
+        shell: bash
+        run: |
+          set +e
+          python scripts/fetch_defillama_history.py --output-dir defillama_output
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload auditable artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEFILLAMA_STABLECOIN_AND_DEX_HISTORY_6_ENTITIES
+          path: defillama_output/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+
+      - name: Enforce collector validation
+        if: always()
+        shell: bash
+        run: |
+          code="${{ steps.collector.outputs.exit_code }}"
+          if [ -z "$code" ]; then
+            echo "Collector did not return an exit code."
+            exit 2
+          fi
+          exit "$code"
