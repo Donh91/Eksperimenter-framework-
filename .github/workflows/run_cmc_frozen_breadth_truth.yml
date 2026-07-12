@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'scripts/fetch_cmc_frozen_breadth.py'
+      - 'scripts/fetch_cmc_frozen_breadth_v2.py'
       - '.github/workflows/run_cmc_frozen_breadth_truth.yml'
   pull_request:
     branches: [main]
     paths:
       - 'scripts/fetch_cmc_frozen_breadth.py'
+      - 'scripts/fetch_cmc_frozen_breadth_v2.py'
       - '.github/workflows/run_cmc_frozen_breadth_truth.yml'
       - 'research_triggers/cmc_breadth_truth_*'
   workflow_dispatch:
@@ -57,11 +59,14 @@ jobs:
         id: collector
         continue-on-error: true
         run: |
-          python scripts/fetch_cmc_frozen_breadth.py \
+          set +e
+          python scripts/fetch_cmc_frozen_breadth_v2.py \
             --start "${{ steps.dates.outputs.start }}" \
             --end "${{ steps.dates.outputs.end }}" \
             --output CMC_FROZEN_BREADTH_TRUTH
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Upload auditable artifact
         if: always()
