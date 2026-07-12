@@ -6,6 +6,12 @@ on:
     paths:
       - 'scripts/fetch_cmc_frozen_breadth.py'
       - '.github/workflows/run_cmc_frozen_breadth_truth.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/fetch_cmc_frozen_breadth.py'
+      - '.github/workflows/run_cmc_frozen_breadth_truth.yml'
+      - 'research_triggers/cmc_breadth_truth_*'
   workflow_dispatch:
     inputs:
       start_date:
