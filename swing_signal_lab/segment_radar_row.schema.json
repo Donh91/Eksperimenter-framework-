@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/segment_radar_row.schema.json",
+  "title": "Segment Radar Row v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "radar_id",
+    "source_snapshot_id",
+    "source_timestamp_utc",
+    "source_hash",
+    "created_at_utc",
+    "horizon_days",
+    "segments",
+    "pullback_risk",
+    "accumulation_state",
+    "early_sale_risk",
+    "swing_trade_sentence",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "SEGMENT_RADAR_ROW_v0_1"},
+    "radar_id": {"type": "string", "minLength": 8},
+    "source_snapshot_id": {"type": "string", "minLength": 8},
+    "source_timestamp_utc": {"type": "string", "format": "date-time"},
+    "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "horizon_days": {"const": 7},
+    "segments": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/segment"}
+    },
+    "pullback_risk": {"enum": ["LOW", "MODERATE", "HIGH", "UNKNOWN"]},
+    "accumulation_state": {
+      "enum": ["WAIT", "BUY_DIP", "ACCUMULATE_SELECTIVELY", "ACCUMULATE_BROADLY", "REDUCE_RISK", "UNKNOWN"]
+    },
+    "early_sale_risk": {"enum": ["LOW", "MODERATE", "HIGH", "UNKNOWN"]},
+    "swing_trade_sentence": {"type": "string", "minLength": 3},
+    "authority": {"const": "SHADOW_ONLY_NO_PORTFOLIO_AUTHORITY"}
+  },
+  "$defs": {
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segment", "movement", "status", "action", "confidence", "evidence_status"],
+      "properties": {
+        "segment": {
+          "enum": ["BTC_ETH", "LARGE_CAP_ALTS", "MID_CAPS", "SMALL_CAPS", "MICROCAPS", "MEMES"]
+        },
+        "movement": {"enum": ["UP", "FLAT", "DOWN", "UNKNOWN"]},
+        "status": {"type": "string", "minLength": 2},
+        "action": {
+          "enum": ["HOLD", "WAIT", "BUY_DIP_SMALL", "ACCUMULATE_SELECTIVELY", "ACCUMULATE_BROADLY", "REDUCE_RISK", "AVOID_CHASING"]
+        },
+        "confidence": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+        "evidence_status": {"enum": ["DIRECT", "PROXY", "PARTIAL", "MISSING"]}
+      }
+    }
+  }
+}
