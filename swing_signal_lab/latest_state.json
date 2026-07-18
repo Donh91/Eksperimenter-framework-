@@ -1,0 +1,46 @@
+{
+  "schema_version": "SWING_SIGNAL_LAB_STATE_v0_1",
+  "status": "INITIALIZED_NO_ROWS",
+  "initialized_at_utc": "2026-07-18T00:00:00Z",
+  "authority": "SHADOW_ONLY_NO_MARKET_OR_PORTFOLIO_AUTHORITY",
+  "source_policy": {
+    "eligible_sources": [
+      "DIRECT_ELIGIBLE_PROJECT_THREAD_PACKET",
+      "VALIDATED_ACCEPTED_LOG_RECEIPT",
+      "VALIDATED_THREAD_DERIVED_HANDOFF"
+    ],
+    "format_test_packets_eligible": false,
+    "maximum_source_age_hours_for_new_rows": 36,
+    "reconstruction_allowed": false
+  },
+  "approved_universe": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "BNB",
+    "LINK",
+    "AAVE",
+    "ONDO",
+    "TAO",
+    "AIOZ",
+    "KARRAT"
+  ],
+  "cost_assumption_bps_round_trip": 20,
+  "maximum_new_signal_rows_per_asset_per_utc_day": 1,
+  "supported_horizons_days": [3, 7],
+  "outcome_checkpoints_days": [1, 3, 7],
+  "open_signal_count": 0,
+  "matured_signal_count": 0,
+  "independent_event_window_count": 0,
+  "segment_radar_count": 0,
+  "evidence_label": "INSUFFICIENT_SAMPLE",
+  "promotion_status": "NOT_PERMITTED",
+  "last_eligible_source_snapshot_id": null,
+  "last_run_id": null,
+  "last_run_status": null,
+  "notes": [
+    "No retrospective seed rows were created.",
+    "The first row must be frozen from a future eligible source before outcome is known.",
+    "FIXED_RISK35_v1 must not be reconstructed from a current Top50 or Top100 universe."
+  ]
+}
