@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/swing_signal_row.schema.json",
+  "title": "Swing Signal Row v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "signal_id",
+    "source_snapshot_id",
+    "source_timestamp_utc",
+    "source_hash",
+    "created_at_utc",
+    "asset",
+    "segment",
+    "direction",
+    "entry_low",
+    "entry_high",
+    "invalidation_price",
+    "target_low",
+    "target_high",
+    "horizon_days",
+    "evidence_codes",
+    "data_quality",
+    "regime_context",
+    "fixed_before_outcome",
+    "duplicate_event_window_id",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {"const": "SWING_SIGNAL_ROW_v0_1"},
+    "signal_id": {"type": "string", "minLength": 8},
+    "source_snapshot_id": {"type": "string", "minLength": 8},
+    "source_timestamp_utc": {"type": "string", "format": "date-time"},
+    "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "asset": {"type": "string", "minLength": 2},
+    "segment": {
+      "enum": ["BTC_ETH", "LARGE_CAP_ALTS", "MID_CAPS", "SMALL_CAPS", "MICROCAPS", "MEMES"]
+    },
+    "direction": {"enum": ["LONG", "WAIT", "AVOID"]},
+    "entry_low": {"type": "number", "exclusiveMinimum": 0},
+    "entry_high": {"type": "number", "exclusiveMinimum": 0},
+    "invalidation_price": {"type": "number", "exclusiveMinimum": 0},
+    "target_low": {"type": "number", "exclusiveMinimum": 0},
+    "target_high": {"type": "number", "exclusiveMinimum": 0},
+    "horizon_days": {"enum": [3, 7]},
+    "evidence_codes": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 2}
+    },
+    "data_quality": {"enum": ["HIGH", "MEDIUM", "LOW"]},
+    "regime_context": {"type": "string", "minLength": 2},
+    "fixed_before_outcome": {"const": true},
+    "duplicate_event_window_id": {"type": "string", "minLength": 2},
+    "status": {"enum": ["OPEN", "MATURED", "INVALIDATED", "TIMED_OUT", "REJECTED"]},
+    "cost_assumption_bps_round_trip": {"type": "number", "minimum": 0},
+    "outcomes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/outcome"}
+    },
+    "rejection_reason": {"type": ["string", "null"]}
+  },
+  "$defs": {
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "horizon_day",
+        "outcome_timestamp_utc",
+        "mark_price",
+        "maximum_favorable_excursion_pct",
+        "maximum_adverse_excursion_pct",
+        "target_hit",
+        "invalidation_hit",
+        "timeout_status",
+        "return_from_entry_mid_pct",
+        "return_after_costs_pct",
+        "direction_result",
+        "timing_result",
+        "severe_failure",
+        "outcome_source_id",
+        "outcome_source_hash"
+      ],
+      "properties": {
+        "horizon_day": {"enum": [1, 3, 7]},
+        "outcome_timestamp_utc": {"type": "string", "format": "date-time"},
+        "mark_price": {"type": "number", "exclusiveMinimum": 0},
+        "maximum_favorable_excursion_pct": {"type": "number"},
+        "maximum_adverse_excursion_pct": {"type": "number"},
+        "target_hit": {"type": "boolean"},
+        "invalidation_hit": {"type": "boolean"},
+        "timeout_status": {"enum": ["NOT_DUE", "OPEN", "TIMED_OUT", "NOT_APPLICABLE"]},
+        "return_from_entry_mid_pct": {"type": "number"},
+        "return_after_costs_pct": {"type": "number"},
+        "direction_result": {"enum": ["CORRECT", "WRONG", "PARTIAL", "UNRESOLVED"]},
+        "timing_result": {"enum": ["EARLY", "OPTIMAL", "LATE", "UNRESOLVED"]},
+        "severe_failure": {"type": "boolean"},
+        "outcome_source_id": {"type": "string", "minLength": 2},
+        "outcome_source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}
