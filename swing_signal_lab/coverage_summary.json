@@ -1,0 +1,25 @@
+{
+  "schema_version": "SWING_SIGNAL_COVERAGE_v0_1",
+  "updated_at_utc": "2026-07-18T00:00:00Z",
+  "raw_signal_rows": 0,
+  "matured_signal_rows": 0,
+  "independent_event_windows": 0,
+  "segment_radar_rows": 0,
+  "by_segment": {
+    "BTC_ETH": 0,
+    "LARGE_CAP_ALTS": 0,
+    "MID_CAPS": 0,
+    "SMALL_CAPS": 0,
+    "MICROCAPS": 0,
+    "MEMES": 0
+  },
+  "by_horizon_days": {
+    "3": 0,
+    "7": 0
+  },
+  "control_comparisons_completed": 0,
+  "severe_failure_count": 0,
+  "evidence_label": "INSUFFICIENT_SAMPLE",
+  "governance_review_permitted": false,
+  "live_promotion_permitted": false
+}
