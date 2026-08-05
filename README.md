@@ -1,6 +1,54 @@
 # Eksperimenter-framework-
 
-Private execution sandbox for non-canonical research and one-shot data recovery.
+Public, non-canonical execution plane for prospective experiments, independent replication, one-shot data recovery and auditable research artifacts.
+
+## Role in the wider framework
+
+This repository is the **Experiment Execution Plane**.
+
+The canonical repository `Donh91/Investering-Framework-Archive-v1` remains the **Control Plane** and owns:
+
+- candidate registration;
+- frozen forecasts;
+- outcome maturation;
+- lifecycle state;
+- weekly adjudication;
+- governance decisions.
+
+This repository owns:
+
+- independent request-hash verification;
+- deterministic replication of sensor firing logic;
+- execution receipts;
+- experimental scripts and workflows;
+- raw research artifacts;
+- no canonical or portfolio authority.
+
+## Automated experiment bridge
+
+`Experiment Execution Plane` runs five times per day and may also be started manually.
+
+It:
+
+1. fetches the public dispatch manifest from the canonical repository;
+2. verifies every request hash;
+3. preserves accepted requests immutably;
+4. recomputes the supplied sensor conjunction from frozen component values;
+5. writes an independent receipt;
+6. publishes `experiment_bridge/LATEST_EXECUTION_RECEIPT_MANIFEST.json` for synchronization back to the Control Plane.
+
+Supported replication states:
+
+- `REPLICATED_FIRED`
+- `REPLICATED_NOT_FIRED`
+- `REPLICATED_WAITING_FOR_DATA`
+- `REPLICATION_MISMATCH`
+
+Novel or initially strange hypotheses are allowed. They must still be measurable and falsifiable. They are not deleted merely because value has not appeared yet.
+
+## Swing Signal Ledger v0.1
+
+The existing Swing Signal Ledger remains shadow-only. Its prospective, anti-hindsight and control-comparison rules remain valid. The new bridge provides the missing automated candidate and receipt path, but it does not grant live trading authority.
 
 ## Installed manual workflow
 
@@ -23,49 +71,16 @@ workflow_dispatch only
 contents: read
 no schedule
 no secrets
-no repository write
+no canonical repository write
 artifact retention: 7 days
 ```
 
-The workflow intentionally fails its final validation step if fewer than all 12 endpoints are fetched and parsed. The artifact is still uploaded first so failures remain auditable.
-
-## Manual DeFiLlama run
-
-Open **Actions** → **Fetch DeFiLlama stablecoin and DEX history** → **Run workflow**.
-
-After completion, download:
-
-`DEFILLAMA_STABLECOIN_AND_DEX_HISTORY_6_ENTITIES`
-
-Upload that artifact to the Investering analysis thread for canonical validation and ingestion.
+The workflow intentionally fails its final validation step if fewer than all 12 endpoints are fetched and parsed. The artifact is uploaded first so failures remain auditable.
 
 ## BTC.D validation tool
 
-The repository also contains:
-
-```text
-scripts/normalize_validate_btc_d.py
-```
-
-It accepts the unedited TradingView export:
-
-```text
-CRYPTOCAP_BTC.D_1D_2023-01-01_to_latest_complete_UTC.csv
-```
-
-PASS requires:
-
-- continuous daily coverage from 2023-01-01;
-- latest complete UTC day present;
-- latest three complete dates present;
-- no duplicate dates;
-- no parse errors;
-- no calendar gaps;
-- 12 dispersed anchors;
-- no interpolation or backdating.
-
-The preferred iPhone workflow is to upload the raw TradingView CSV directly to the Investering ChatGPT thread, where the same strict validator can be run and the resulting series can be canonically ingested.
+`scripts/normalize_validate_btc_d.py` validates an unedited TradingView BTC.D export with continuous daily coverage, no duplicates, no gaps, dispersed anchors and no interpolation or backdating.
 
 ## Authority boundary
 
-No market call. No portfolio action. No scoring. No rule ratification.
+No market call. No portfolio action. No automatic rule ratification. No model-weight change. No canonical promotion. No self-merge of experimental findings.
