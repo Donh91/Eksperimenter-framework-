@@ -1,0 +1,60 @@
+name: Experiment Execution Plane
+
+on:
+  schedule:
+    - cron: '15 0,6,11,15,19 * * *'
+      timezone: 'Europe/Copenhagen'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: experiment-execution-plane
+  cancel-in-progress: false
+
+jobs:
+  replicate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch, verify and replicate experiment requests
+        run: |
+          mkdir -p experiment_bridge/{requests,receipts}
+          python scripts/experiment_execution_plane.py \
+            --manifest-url https://raw.githubusercontent.com/Donh91/Investering-Framework-Archive-v1/main/research/experiment_lifecycle/LATEST_EXPERIMENT_DISPATCH_MANIFEST.json \
+            --request-root experiment_bridge/requests \
+            --receipt-root experiment_bridge/receipts \
+            --manifest-output experiment_bridge/LATEST_EXECUTION_RECEIPT_MANIFEST.json \
+            --state-output experiment_bridge/state.json | tee experiment_bridge/latest_run_summary.json
+      - name: Commit new requests and receipts with readback
+        shell: bash
+        run: |
+          git config user.name 'experiment-execution-bot'
+          git config user.email 'experiment-execution-bot@users.noreply.github.com'
+          git add experiment_bridge
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "experiments: replicate dispatched candidates ${GITHUB_RUN_ID}"
+          pushed=false
+          for attempt in 1 2 3; do
+            git rebase --abort 2>/dev/null || true
+            if git pull --rebase origin main && git push origin HEAD:main; then pushed=true; break; fi
+            sleep $((attempt * 5))
+          done
+          [ "$pushed" = true ]
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: experiment-execution-plane-${{ github.run_id }}
+          path: experiment_bridge/
+          retention-days: 14
