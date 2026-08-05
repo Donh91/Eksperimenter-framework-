@@ -1,0 +1,29 @@
+name: Experiment Execution Plane Gate
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/experiment_execution_plane.py'
+      - 'tests/test_experiment_execution_plane.py'
+      - '.github/workflows/experiment-execution-plane.yml'
+      - '.github/workflows/experiment-execution-plane-gate.yml'
+      - 'experiment_bridge/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile scripts/experiment_execution_plane.py
+      - name: Test
+        run: python -m unittest discover -s tests -v
