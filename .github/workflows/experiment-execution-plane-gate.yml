@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/experiment_execution_plane.py'
-      - 'tests/test_experiment_execution_plane.py'
+      - 'tests/**'
       - '.github/workflows/experiment-execution-plane.yml'
       - '.github/workflows/experiment-execution-plane-gate.yml'
       - 'experiment_bridge/**'
