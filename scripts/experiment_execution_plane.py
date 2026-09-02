@@ -14,7 +14,7 @@ MANIFEST_V1 = "EXPERIMENT_DISPATCH_MANIFEST_v1"
 MANIFEST_V2 = "EXPERIMENT_DISPATCH_MANIFEST_v2_SCIENTIFIC_ADMISSION"
 QUALIFIED = "QUALIFIED_FOR_FORWARD_TEST"
 
-INDEPENDENT_RECOMPUTE = "INDEPENDENT_COMPONENT_RECOMPUTE"
+EMBEDDED_RECOMPUTE = "COMPONENT_RECOMPUTE_EMBEDDED_OBSERVATION"
 STRUCTURAL_ONLY = "STRUCTURAL_ONLY_NO_COMPONENT_RESULTS"
 WAITING_SCOPE = "WAITING_FOR_RECOMPUTABLE_DATA"
 NO_SOURCE_REFERENCE = "NO_SOURCE_REFERENCE"
@@ -68,9 +68,9 @@ def recompute_row(row: dict[str, Any]) -> bool | None:
 def recompute_status(request: dict[str, Any]) -> tuple[str, str, str]:
     """Recompute request status without treating structural transport as evidence.
 
-    A FORECAST_TEST with no recomputable component rows is intentionally
-    UNVERIFIED. It can still receive a transport/execution receipt, but that
-    receipt must not be interpreted as independent replication evidence.
+    Component logic is recomputed from values embedded in the request. That is
+    stronger than a structural receipt, but it is not independent data-source
+    verification and must never be labelled as such.
     """
     observation = request.get("embedded_observation") or {}
     results = observation.get("component_results") or []
@@ -96,13 +96,13 @@ def recompute_status(request: dict[str, Any]) -> tuple[str, str, str]:
     if recomputed and all(value is True for value in recomputed):
         return (
             "REPLICATED_FIRED",
-            INDEPENDENT_RECOMPUTE,
-            "INDEPENDENT_RECOMPUTE_MATCH_CANDIDATE",
+            EMBEDDED_RECOMPUTE,
+            "EMBEDDED_RECOMPUTE_MATCH_CANDIDATE",
         )
     return (
         "REPLICATED_NOT_FIRED",
-        INDEPENDENT_RECOMPUTE,
-        "INDEPENDENT_RECOMPUTE_MATCH_CANDIDATE",
+        EMBEDDED_RECOMPUTE,
+        "EMBEDDED_RECOMPUTE_MATCH_CANDIDATE",
     )
 
 
@@ -138,7 +138,7 @@ def main() -> None:
     if manifest.get("contract") == MANIFEST_V2 and manifest.get("admission_required") != QUALIFIED:
         raise SystemExit("invalid_scientific_admission_requirement")
 
-    processed = mismatches = unverified = independent_recomputes = 0
+    processed = mismatches = unverified = component_recomputes = 0
     for item in manifest.get("requests", []):
         if args.manifest_file is None:
             request = fetch_json(item["raw_url"])
@@ -175,14 +175,14 @@ def main() -> None:
             verification_reason = "UNKNOWN_SOURCE_EVALUATION_STATUS"
         elif local_status != expected:
             replication_status = "REPLICATION_MISMATCH"
-            verification_reason = "INDEPENDENT_RECOMPUTE_DISAGREES_WITH_SOURCE"
+            verification_reason = "EMBEDDED_RECOMPUTE_DISAGREES_WITH_SOURCE"
         else:
             replication_status = local_status
-            verification_reason = "INDEPENDENT_RECOMPUTE_MATCH"
+            verification_reason = "EMBEDDED_RECOMPUTE_MATCH"
 
         mismatches += int(replication_status == "REPLICATION_MISMATCH")
         unverified += int(replication_status == "REPLICATION_UNVERIFIED")
-        independent_recomputes += int(verification_scope == INDEPENDENT_RECOMPUTE)
+        component_recomputes += int(verification_scope == EMBEDDED_RECOMPUTE)
 
         receipt = {
             "contract": "EXPERIMENT_EXECUTION_RECEIPT_v1",
@@ -198,7 +198,8 @@ def main() -> None:
             "replication_status": replication_status,
             "verification_scope": verification_scope,
             "verification_reason": verification_reason,
-            "independent_recompute_performed": verification_scope == INDEPENDENT_RECOMPUTE,
+            "component_recompute_performed": verification_scope == EMBEDDED_RECOMPUTE,
+            "independent_data_verification_performed": False,
             "local_frozen_forecast_id": request.get("local_frozen_forecast_id"),
             "rules": {"automatic_promotion": False, "age_based_expiry": False, "weird_or_novel_hypotheses_allowed": True, "measurement_and_falsifier_required": True},
             "authority": {"portfolio_action": False, "framework_state_change": False, "model_weight_change": False, "canonical_promotion": False},
@@ -235,7 +236,8 @@ def main() -> None:
         "total_receipt_count": len(receipts),
         "replication_mismatch_count": mismatches,
         "replication_unverified_count": unverified,
-        "independent_recompute_count": independent_recomputes,
+        "component_recompute_count": component_recomputes,
+        "independent_data_verification_count": 0,
         "status": "DEGRADED" if (mismatches or unverified) else "PASS",
         "authority": "NO_CANONICAL_OR_PORTFOLIO_AUTHORITY",
     }
