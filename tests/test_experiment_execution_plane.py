@@ -63,16 +63,18 @@ class ExecutionPlaneTest(unittest.TestCase):
             "local_frozen_forecast_id": "EXP-FC-test",
         }
 
-    def test_replicates_firing_with_independent_component_recompute(self):
+    def test_replicates_firing_with_embedded_component_recompute(self):
         request = self.request("FIRED", [
             {"operator": "GT", "latest": 60, "previous": 45, "threshold": 50, "delta_pct": 33.3, "matched": True},
             {"operator": "DELTA_PCT_GT", "latest": 0.0295, "previous": 0.0290, "threshold": 0.5, "delta_pct": 1.72, "matched": True},
         ])
         receipt, state = self.run_case(request)
         self.assertEqual(receipt["replication_status"], "REPLICATED_FIRED")
-        self.assertEqual(receipt["verification_scope"], "INDEPENDENT_COMPONENT_RECOMPUTE")
-        self.assertTrue(receipt["independent_recompute_performed"])
-        self.assertEqual(state["independent_recompute_count"], 1)
+        self.assertEqual(receipt["verification_scope"], "COMPONENT_RECOMPUTE_EMBEDDED_OBSERVATION")
+        self.assertTrue(receipt["component_recompute_performed"])
+        self.assertFalse(receipt["independent_data_verification_performed"])
+        self.assertEqual(state["component_recompute_count"], 1)
+        self.assertEqual(state["independent_data_verification_count"], 0)
         self.assertEqual(state["status"], "PASS")
 
     def test_replicates_not_fired(self):
@@ -81,16 +83,18 @@ class ExecutionPlaneTest(unittest.TestCase):
         ], request_id="ER-not-fired")
         receipt, state = self.run_case(request)
         self.assertEqual(receipt["replication_status"], "REPLICATED_NOT_FIRED")
-        self.assertEqual(receipt["verification_scope"], "INDEPENDENT_COMPONENT_RECOMPUTE")
+        self.assertEqual(receipt["verification_scope"], "COMPONENT_RECOMPUTE_EMBEDDED_OBSERVATION")
+        self.assertTrue(receipt["component_recompute_performed"])
+        self.assertFalse(receipt["independent_data_verification_performed"])
         self.assertEqual(state["status"], "PASS")
 
-    def test_independent_recompute_disagreement_is_mismatch(self):
+    def test_embedded_recompute_disagreement_is_mismatch(self):
         request = self.request("FIRED", [
             {"operator": "GT", "latest": 40, "previous": 45, "threshold": 50, "delta_pct": -11.1, "matched": False},
         ], request_id="ER-mismatch")
         receipt, state = self.run_case(request)
         self.assertEqual(receipt["replication_status"], "REPLICATION_MISMATCH")
-        self.assertEqual(receipt["verification_reason"], "INDEPENDENT_RECOMPUTE_DISAGREES_WITH_SOURCE")
+        self.assertEqual(receipt["verification_reason"], "EMBEDDED_RECOMPUTE_DISAGREES_WITH_SOURCE")
         self.assertEqual(state["replication_mismatch_count"], 1)
         self.assertEqual(state["status"], "DEGRADED")
 
@@ -100,7 +104,8 @@ class ExecutionPlaneTest(unittest.TestCase):
         self.assertEqual(receipt["replication_status"], "REPLICATION_UNVERIFIED")
         self.assertEqual(receipt["verification_scope"], "STRUCTURAL_ONLY_NO_COMPONENT_RESULTS")
         self.assertEqual(receipt["verification_reason"], "EMPTY_FORECAST_TEST_NO_RECOMPUTABLE_COMPONENTS")
-        self.assertFalse(receipt["independent_recompute_performed"])
+        self.assertFalse(receipt["component_recompute_performed"])
+        self.assertFalse(receipt["independent_data_verification_performed"])
         self.assertEqual(state["replication_unverified_count"], 1)
         self.assertEqual(state["status"], "DEGRADED")
 
