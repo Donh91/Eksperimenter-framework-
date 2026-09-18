@@ -120,6 +120,43 @@ class ExecutionPlaneTest(unittest.TestCase):
         self.assertEqual(state["replication_unverified_count"], 1)
         self.assertEqual(state["status"], "DEGRADED")
 
+    def test_second_run_reuses_hash_verified_local_request_without_source_refetch(self):
+        request = self.request("OBSERVED_NOT_FIRED", [
+            {"operator": "GT", "latest": 40, "previous": 45, "threshold": 50, "delta_pct": -11.1, "matched": False},
+        ], request_id="ER-cached")
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            target = Path(td) / "target"
+            req_path = source / "research/experiment_lifecycle/dispatch/2026/09/02/ER-cached.json"
+            req_path.parent.mkdir(parents=True)
+            req_path.write_text(json.dumps(request))
+            manifest = {"contract": "EXPERIMENT_DISPATCH_MANIFEST_v1", "requests": [{
+                "request_id": request["request_id"],
+                "candidate_id": request["candidate_id"],
+                "path": str(req_path.relative_to(source)),
+                "sha256": sha(request),
+                "raw_url": "unused",
+            }]}
+            manifest_path = source / "research/experiment_lifecycle/LATEST_EXPERIMENT_DISPATCH_MANIFEST.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            manifest_path.write_text(json.dumps(manifest))
+            command = [
+                sys.executable, str(SCRIPT),
+                "--manifest-file", str(manifest_path),
+                "--source-root", str(source),
+                "--request-root", str(target / "experiment_bridge/requests"),
+                "--receipt-root", str(target / "experiment_bridge/receipts"),
+                "--manifest-output", str(target / "experiment_bridge/LATEST_EXECUTION_RECEIPT_MANIFEST.json"),
+                "--state-output", str(target / "experiment_bridge/state.json"),
+            ]
+            subprocess.run(command, check=True)
+            req_path.unlink()
+            subprocess.run(command, check=True)
+            state = json.loads((target / "experiment_bridge/state.json").read_text())
+            self.assertEqual(state["cached_request_count"], 1)
+            self.assertEqual(state["fetched_request_count"], 0)
+            self.assertEqual(state["new_receipt_count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

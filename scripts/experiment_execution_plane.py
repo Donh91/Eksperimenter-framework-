@@ -139,19 +139,30 @@ def main() -> None:
         raise SystemExit("invalid_scientific_admission_requirement")
 
     processed = mismatches = unverified = component_recomputes = 0
+    cached_requests = fetched_requests = 0
     for item in manifest.get("requests", []):
-        if args.manifest_file is None:
+        request_id = item.get("request_id")
+        if not isinstance(request_id, str) or not request_id:
+            raise SystemExit("manifest_request_id_missing")
+        request_path = args.request_root / f"{request_id}.json"
+        if request_path.exists():
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            cached_requests += 1
+        elif args.manifest_file is None:
             request = fetch_json(item["raw_url"])
+            fetched_requests += 1
         else:
             source_root = args.source_root or args.manifest_file.parent
             request = json.loads((source_root / item["path"]).read_text(encoding="utf-8"))
+            fetched_requests += 1
         if sha256(request) != item["sha256"]:
             raise SystemExit(f"request_hash_mismatch:{item.get('request_id')}")
+        if request.get("request_id") != request_id:
+            raise SystemExit(f"request_identity_mismatch:{request_id}")
         if request.get("contract") != "EXPERIMENT_REQUEST_v1":
             raise SystemExit("invalid_request_contract")
         validate_manifest_and_request(manifest, request)
 
-        request_path = args.request_root / f"{request['request_id']}.json"
         request_path.parent.mkdir(parents=True, exist_ok=True)
         if not request_path.exists():
             request_path.write_bytes(canonical(request))
@@ -232,6 +243,8 @@ def main() -> None:
         "source_manifest_contract": manifest.get("contract"),
         "scientific_admission_enforced": manifest.get("contract") == MANIFEST_V2,
         "dispatch_request_count": len(manifest.get("requests", [])),
+        "cached_request_count": cached_requests,
+        "fetched_request_count": fetched_requests,
         "new_receipt_count": processed,
         "total_receipt_count": len(receipts),
         "replication_mismatch_count": mismatches,
