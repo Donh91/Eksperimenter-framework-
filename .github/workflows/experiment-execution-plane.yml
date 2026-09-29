@@ -19,14 +19,84 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
+      - name: Semantic dispatch preflight
+        id: preflight
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, urllib.error, urllib.request
+
+          manifest_url = "https://raw.githubusercontent.com/Donh91/Investering-Framework-Archive-v1/main/research/experiment_lifecycle/LATEST_EXPERIMENT_DISPATCH_MANIFEST.json"
+          with urllib.request.urlopen(manifest_url, timeout=60) as response:
+              manifest = json.load(response)
+
+          if manifest.get("contract") not in {
+              "EXPERIMENT_DISPATCH_MANIFEST_v1",
+              "EXPERIMENT_DISPATCH_MANIFEST_v2_SCIENTIFIC_ADMISSION",
+          }:
+              raise SystemExit("invalid_dispatch_manifest_contract")
+          if (
+              manifest.get("contract") == "EXPERIMENT_DISPATCH_MANIFEST_v2_SCIENTIFIC_ADMISSION"
+              and manifest.get("admission_required") != "QUALIFIED_FOR_FORWARD_TEST"
+          ):
+              raise SystemExit("invalid_scientific_admission_requirement")
+
+          semantic = {
+              "contract": manifest.get("contract"),
+              "source_repository": manifest.get("source_repository"),
+              "source_branch": manifest.get("source_branch"),
+              "request_count": manifest.get("request_count"),
+              "requests": manifest.get("requests", []),
+              "admission_required": manifest.get("admission_required"),
+              "authority": manifest.get("authority"),
+          }
+          canonical=(json.dumps(semantic,sort_keys=True,separators=(",",":"))+"\n").encode()
+          current=hashlib.sha256(canonical).hexdigest()
+
+          state={}
+          api=f"https://api.github.com/repos/{os.environ['REPO']}/contents/experiment_bridge/state.json?ref=main"
+          req=urllib.request.Request(api,headers={
+              "Authorization": "Bearer "+os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github.raw+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "experiment-semantic-preflight/1.0",
+          })
+          try:
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  state=json.load(response)
+          except urllib.error.HTTPError as exc:
+              if exc.code != 404:
+                  raise
+
+          previous=state.get("source_manifest_semantic_sha256")
+          changed=(previous != current)
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              f.write(f"changed={str(changed).lower()}\n")
+              f.write(f"semantic_sha256={current}\n")
+          print(json.dumps({
+              "contract":"EXPERIMENT_EXECUTION_PREFLIGHT_v1",
+              "changed":changed,
+              "request_count":manifest.get("request_count"),
+              "previous_semantic_sha256":previous,
+              "current_semantic_sha256":current,
+          },sort_keys=True))
+          PY
+
       - uses: actions/checkout@v4
+        if: steps.preflight.outputs.changed == 'true'
         with:
           ref: main
           fetch-depth: 0
       - uses: actions/setup-python@v5
+        if: steps.preflight.outputs.changed == 'true'
         with:
           python-version: '3.12'
       - name: Fetch, verify and replicate experiment requests
+        if: steps.preflight.outputs.changed == 'true'
         run: |
           mkdir -p experiment_bridge/{requests,receipts}
           python scripts/experiment_execution_plane.py \
@@ -36,6 +106,7 @@ jobs:
             --manifest-output experiment_bridge/LATEST_EXECUTION_RECEIPT_MANIFEST.json \
             --state-output experiment_bridge/state.json | tee experiment_bridge/latest_run_summary.json
       - name: Commit new requests and receipts with readback
+        if: steps.preflight.outputs.changed == 'true'
         shell: bash
         run: |
           git config user.name 'experiment-execution-bot'
@@ -53,7 +124,7 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor HEAD origin/main
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.preflight.outputs.changed == 'true'
         with:
           name: experiment-execution-plane-${{ github.run_id }}
           path: experiment_bridge/
