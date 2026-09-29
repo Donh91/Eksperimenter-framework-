@@ -32,6 +32,20 @@ def now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def manifest_semantic_sha256(manifest: dict[str, Any]) -> str:
+    """Hash every dispatch-relevant field while excluding volatile generation time."""
+    semantic = {
+        "contract": manifest.get("contract"),
+        "source_repository": manifest.get("source_repository"),
+        "source_branch": manifest.get("source_branch"),
+        "request_count": manifest.get("request_count"),
+        "requests": manifest.get("requests", []),
+        "admission_required": manifest.get("admission_required"),
+        "authority": manifest.get("authority"),
+    }
+    return sha256(semantic)
+
+
 def load_source(url: str | None, path: Path | None) -> dict[str, Any]:
     if path is not None:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -241,6 +255,7 @@ def main() -> None:
         "contract": "EXPERIMENT_EXECUTION_PLANE_STATE_v1",
         "updated_at_utc": output["generated_at_utc"],
         "source_manifest_contract": manifest.get("contract"),
+        "source_manifest_semantic_sha256": manifest_semantic_sha256(manifest),
         "scientific_admission_enforced": manifest.get("contract") == MANIFEST_V2,
         "dispatch_request_count": len(manifest.get("requests", [])),
         "cached_request_count": cached_requests,
