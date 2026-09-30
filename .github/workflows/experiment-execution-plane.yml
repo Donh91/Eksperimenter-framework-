@@ -70,7 +70,11 @@ jobs:
                   state=json.load(response)
           except urllib.error.HTTPError as exc:
               if exc.code != 404:
-                  raise
+                  print(f"state_preflight_degraded_http_{exc.code}: forcing full replay")
+              state={}
+          except Exception as exc:
+              print(f"state_preflight_degraded_{type(exc).__name__}: forcing full replay")
+              state={}
 
           previous=state.get("source_manifest_semantic_sha256")
           changed=(previous != current)
