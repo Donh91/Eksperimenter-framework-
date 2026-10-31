@@ -153,6 +153,11 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("workflow_run:",text)
         self.assertIn("GITHUB_CHECKOUT_SHA=$(git rev-parse --verify HEAD)",text)
         self.assertIn("PUBLIC_PONS_SHADOW_READBACK_PASS",text)
+        self.assertIn("push:\n    branches: [main]",text)
+        self.assertIn("'.github/workflows/public-pons-shadow.yml'",text)
+        self.assertIn("'public_pons_shadow/collector.py'",text)
+        self.assertNotIn("'public_pons_shadow/**'",text)
+        self.assertNotIn("'public_pons_shadow/runs/**'",text)
 
     def test_mutation_guard_catches_privileged_source(self):
         text=Path(".github/workflows/public-pons-shadow.yml").read_text()
