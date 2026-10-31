@@ -3,6 +3,13 @@ name: Public Pons V2 Factory Shadow
 # Temporary separate PUBLIC execution plane. All RPC inputs are public chain
 # factory logs, exhaustive for a bounded block range; no private Alpha source.
 on:
+  # Source/workflow changes can prove their own runtime immediately after merge.
+  # Data-only commits under public_pons_shadow/runs and state.json do NOT retrigger.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-pons-shadow.yml'
+      - 'public_pons_shadow/collector.py'
   schedule:
     - cron: '27 * * * *'
   workflow_dispatch:
