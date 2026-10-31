@@ -164,7 +164,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertFalse(protected(text+"\n# secrets.LEAK"))
         self.assertFalse(protected(text.replace("workflow_dispatch:", "pull_request_target:")))
         self.assertFalse(protected(text.replace("refs/heads/main","refs/heads/any")))
-        self.assertFalse(protected(text.replace("group: experiment-execution-plane","group: random"))
+        self.assertFalse(protected(text.replace("group: experiment-execution-plane","group: random")))
 
 
 if __name__=="__main__":
