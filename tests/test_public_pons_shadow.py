@@ -74,7 +74,7 @@ class PublicPonsTests(unittest.TestCase):
             root=Path(d);out=self.capture(root,RPC(head=110),limit=4)
             receipt=json.loads((root/out["receipt"]).read_text())
             self.assertEqual(receipt["remaining_blocks"],6)
-            self.assertEqual(receipt["to_block"],103)
+            self.assertEqual(receipt["to_block"],102)
 
     def test_bad_chain_never_writes(self):
         with tempfile.TemporaryDirectory() as d:
@@ -112,7 +112,9 @@ class PublicPonsTests(unittest.TestCase):
     def test_duplicate_and_cap_refused(self):
         class Duplicate(RPC):
             def __call__(self,url,method,args):
-                if method=="eth_getLogs":return [log(89),log(89)]
+                if method=="eth_getLogs":
+                    begin=int(args[0]["fromBlock"],16)
+                    return [log(begin),log(begin)]
                 return super().__call__(url,method,args)
         with tempfile.TemporaryDirectory() as d:
             with self.assertRaisesRegex(RuntimeError,"DUPLICATE_LOG"):
@@ -133,6 +135,37 @@ class PublicPonsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with self.assertRaisesRegex(ValueError,"RUN_OR_CHECKOUT_SHA_INVALID"):
                 p.collect(Path(d),p.Client(RPC()),"","",clock=lambda:NOW)
+
+
+
+class WorkflowPolicyTests(unittest.TestCase):
+    def test_public_only_workflow_authority(self):
+        text=Path(".github/workflows/public-pons-shadow.yml").read_text()
+        self.assertIn("name: Public Pons V2 Factory Shadow",text)
+        self.assertIn("group: experiment-execution-plane",text)
+        self.assertIn("cancel-in-progress: false",text)
+        self.assertIn("github.ref == 'refs/heads/main'",text)
+        self.assertIn("github.repository == 'Donh91/Eksperimenter-framework-'",text)
+        self.assertIn("permissions:\n  contents: read",text)
+        self.assertIn("    permissions:\n      contents: write",text)
+        self.assertNotIn("secrets.",text)
+        self.assertNotIn("pull_request_target:",text)
+        self.assertNotIn("workflow_run:",text)
+        self.assertIn("GITHUB_CHECKOUT_SHA=$(git rev-parse --verify HEAD)",text)
+        self.assertIn("PUBLIC_PONS_SHADOW_READBACK_PASS",text)
+
+    def test_mutation_guard_catches_privileged_source(self):
+        text=Path(".github/workflows/public-pons-shadow.yml").read_text()
+        def protected(source):
+            return ("secrets." not in source and "pull_request_target:" not in source
+                    and "github.ref == 'refs/heads/main'" in source
+                    and "group: experiment-execution-plane" in source)
+        self.assertTrue(protected(text))
+        self.assertFalse(protected(text+"\n# secrets.LEAK"))
+        self.assertFalse(protected(text.replace("workflow_dispatch:", "pull_request_target:")))
+        self.assertFalse(protected(text.replace("refs/heads/main","refs/heads/any")))
+        self.assertFalse(protected(text.replace("group: experiment-execution-plane","group: random"))
+
 
 if __name__=="__main__":
     unittest.main()
