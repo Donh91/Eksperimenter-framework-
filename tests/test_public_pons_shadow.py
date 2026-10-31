@@ -159,6 +159,23 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("'public_pons_shadow/**'",text)
         self.assertNotIn("'public_pons_shadow/runs/**'",text)
 
+    def test_workflow_actions_locked_to_successful_sha(self):
+        text=Path(".github/workflows/public-pons-shadow.yml").read_text()
+        checkout="actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+        python="actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065"
+        self.assertIn("uses: "+checkout, text)
+        self.assertIn("uses: "+python, text)
+        self.assertNotIn("uses: actions/checkout@v4", text)
+        self.assertNotIn("uses: actions/setup-python@v5", text)
+        # Pure code review fixture; no public source or credential mutation.
+        def pinned(source):
+            return ("uses: "+checkout in source and "uses: "+python in source
+                    and "uses: actions/checkout@v4" not in source
+                    and "uses: actions/setup-python@v5" not in source)
+        self.assertTrue(pinned(text))
+        self.assertFalse(pinned(text.replace(checkout, "actions/checkout@v4")))
+        self.assertFalse(pinned(text.replace(python, "actions/setup-python@v5")))
+
     def test_mutation_guard_catches_privileged_source(self):
         text=Path(".github/workflows/public-pons-shadow.yml").read_text()
         def protected(source):
