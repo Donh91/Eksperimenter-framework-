@@ -1,0 +1,77 @@
+name: Public Pons V2 Factory Shadow
+
+# Temporary separate PUBLIC execution plane. All RPC inputs are public chain
+# factory logs, exhaustive for a bounded block range; no private Alpha source.
+on:
+  schedule:
+    - cron: '27 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# The existing Experiment Execution Plane uses this exact same writer group.
+# It serializes this repo's two known public main writers, not other actors.
+concurrency:
+  group: experiment-execution-plane
+  cancel-in-progress: false
+
+jobs:
+  public-shadow:
+    if: github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate bounded collector and negative controls
+        run: |
+          python -m py_compile public_pons_shadow/collector.py tests/test_public_pons_shadow.py
+          python public_pons_shadow/collector.py --validate-only
+          python -m unittest tests.test_public_pons_shadow -v
+      - name: Capture exhaustive public Pons V2 factory events
+        run: |
+          GITHUB_CHECKOUT_SHA=$(git rev-parse --verify HEAD) python public_pons_shadow/collector.py --repo-root .
+      - name: Commit public source and verify exact remote main blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'public-pons-shadow-bot'
+          git config user.email 'public-pons-shadow-bot@users.noreply.github.com'
+          git add -A -- public_pons_shadow/state.json public_pons_shadow/runs
+          if git diff --cached --quiet; then
+            echo 'NO_NEW_PUBLIC_SAFE_BLOCK'
+            exit 0
+          fi
+          git commit -m "source: public Pons shadow $GITHUB_RUN_ID"
+          changed=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          pushed=false
+          for attempt in 1 2 3; do
+            git rebase --abort 2>/dev/null || true
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              pushed=true
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          test "$pushed" = true
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          while IFS= read -r file; do
+            test -n "$file" || continue
+            expected=$(git rev-parse "HEAD:$file")
+            observed=$(git rev-parse "origin/main:$file")
+            if [ "$expected" != "$observed" ]; then
+              echo "PUBLIC_MAIN_READBACK_MISMATCH:$file"
+              exit 1
+            fi
+          done <<< "$changed"
+          echo "PUBLIC_PONS_SHADOW_READBACK_PASS $GITHUB_RUN_ID"
