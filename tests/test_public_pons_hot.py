@@ -92,6 +92,16 @@ class TestHotShadow(unittest.TestCase):
             self.assertEqual(self.capture(root,FakeRPC(head=100),run="102",window=12)["status"],"NO_NEW_HOT_SAFE_BLOCK")
             self.assertFalse(list(root.glob("**/*_102_receipt.json")))
 
+    def test_safe_head_regression_is_not_a_no_op(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            self.capture(root,FakeRPC(head=100),run="101",window=12)
+            before=(root/hot.STATE).read_bytes()
+            with self.assertRaisesRegex(RuntimeError,"HOT_HEAD_REGRESSED_NO_ADVANCE"):
+                self.capture(root,FakeRPC(head=96),run="102",window=12)
+            self.assertEqual((root/hot.STATE).read_bytes(),before)
+            self.assertFalse(list(root.glob("**/*_102_receipt.json")))
+
     def test_reorg_at_previous_hot_cursor_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)
