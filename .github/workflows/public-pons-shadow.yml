@@ -174,11 +174,27 @@ jobs:
             echo 'NO_NEW_PUBLIC_SAFE_BLOCK'
             exit 0
           fi
+          baseline_main=$(git rev-parse HEAD)
           git commit -m "source: bounded public HOT/COLD shadow $GITHUB_RUN_ID"
           changed=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          # A different source writer may update main between checkout, source
+          # validation and push. Never rebase stale cursors onto newer evidence.
+          source_blob() {
+            local ref="$1" path="$2"
+            git rev-parse --verify "$ref:$path" 2>/dev/null || printf '%s\n' MISSING
+          }
           pushed=false
           for attempt in 1 2 3; do
             git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            for path in public_pons_shadow/state.json public_pons_shadow/hot_state.json; do
+              before=$(source_blob "$baseline_main" "$path")
+              remote=$(source_blob origin/main "$path")
+              if [ "$before" != "$remote" ]; then
+                echo "PUBLIC_PONS_CONCURRENT_CURSOR_CHANGE_NO_OVERWRITE:$path"
+                exit 1
+              fi
+            done
             if git pull --rebase origin main && git push origin HEAD:main; then
               pushed=true
               break
