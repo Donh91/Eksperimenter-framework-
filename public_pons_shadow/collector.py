@@ -20,7 +20,7 @@ RPCS=("https://rpc.mainnet.chain.robinhood.com",
       "https://rpc.nodeflare.app/robinhood/public")
 CONTRACT="PUBLIC_PONS_V2_FACTORY_EXHAUSTIVE_SHADOW_V1"
 STATE=Path("public_pons_shadow/state.json")
-MAX_SCAN=60000
+MAX_SCAN=300000
 MAX_CHUNK=2000
 MAX_EVENTS=5000
 HEX32=re.compile(r"^0x[a-f0-9]{64}$")
@@ -155,8 +155,17 @@ def collect(root,client,run_id,checkout_sha,clock=now,
     calls=0
     for begin in range(lo,hi+1,chunk):
         end=min(hi,begin+chunk-1)
-        raw=client.call("eth_getLogs",[dict(fromBlock=hex(begin),toBlock=hex(end),
-                                            address=FACTORY,topics=[TOPIC0])])
+        try:
+            raw=client.call("eth_getLogs",[dict(fromBlock=hex(begin),toBlock=hex(end),
+                                                address=FACTORY,topics=[TOPIC0])])
+        except RuntimeError as exc:
+            # Both approved public RPCs unavailable after a completed prefix.
+            # Salvage only the FULLY scanned contiguous prefix, never skip,
+            # interpolate, or mark a partially fetched chunk as complete.
+            if "BOTH_PUBLIC_RPC_ENDPOINTS_FAILED" not in str(exc) or calls==0:
+                raise
+            hi=begin-1
+            break
         calls+=1
         if not isinstance(raw,list): raise RuntimeError("LOG_RESULT_NOT_ARRAY")
         if len(events)+len(raw)>MAX_EVENTS:
