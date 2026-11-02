@@ -64,6 +64,33 @@ class TestPublicPonsSecurity(unittest.TestCase):
         ):
             return publish_gate.validate(stage,publisher,"100",SHA)
 
+    def test_hot_and_cold_publish_together_without_cursor_cross_admission(self):
+        from public_pons_shadow import collector as cold
+        with tempfile.TemporaryDirectory() as d:
+            base=Path(d)
+            root=base/"source"
+            root.mkdir()
+            hot_out=hot.hot_capture(root,cold.Client(FakeRPC(head=100)),
+                                    "100",SHA,clock=lambda:NOW,window=12)
+            cold_out=cold.collect(root,cold.Client(FakeRPC(head=100)),
+                                  "100",SHA,clock=lambda:NOW,bootstrap=12,max_scan=12,chunk=3)
+            stage=base/"stage"
+            for out, state in ((hot_out,hot.STATE),(cold_out,cold.STATE)):
+                receipt=Path(out["receipt"])
+                events=receipt.with_name(receipt.name.replace("_receipt.json","_events.json"))
+                for rel in (state,receipt,events):
+                    target=stage/rel
+                    target.parent.mkdir(parents=True,exist_ok=True)
+                    shutil.copyfile(root/rel,target)
+            publisher=base/"publisher"
+            (publisher/"public_pons_shadow").mkdir(parents=True)
+            updates=self.validate(stage,publisher)
+            self.assertEqual(len(updates),6)
+            self.assertEqual(len(set(map(str,updates))),6)
+            for key in ("private_source_admitted","provider_first_known_verified"):
+                for out in (hot_out,cold_out):
+                    self.assertFalse(json.loads((root/out["receipt"]).read_text())[key])
+
     def test_genuine_hot_stage_is_unadmitted(self):
         with tempfile.TemporaryDirectory() as d:
             stage,publisher,receipt=self.stage_hot(Path(d))
