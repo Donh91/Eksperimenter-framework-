@@ -29,7 +29,7 @@ class FakeRPC:
                          blockNumber=hex(lo),logIndex="0x0",
                          transactionHash="0x"+f"{lo:064x}",blockHash=BH,data="0x")]
         if method=="eth_getBlockByNumber":
-            return {"number":args[0],"timestamp":hex(int(NOW.timestamp())-30)}
+            return {"number":args[0],"timestamp":hex(int(NOW.timestamp())-30),"hash":BH}
         raise AssertionError(method)
 
 class TestHotShadow(unittest.TestCase):
