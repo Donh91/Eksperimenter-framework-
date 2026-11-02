@@ -142,7 +142,8 @@ class WorkflowPolicyTests(unittest.TestCase):
     def test_public_only_workflow_authority(self):
         text=Path(".github/workflows/public-pons-shadow.yml").read_text()
         self.assertIn("name: Public Pons V2 Factory Shadow",text)
-        self.assertIn("group: experiment-execution-plane",text)
+        self.assertIn("experiment-execution-plane",text)
+        self.assertIn("public-pons-review-",text)
         self.assertIn("cancel-in-progress: false",text)
         self.assertIn("github.ref == 'refs/heads/main'",text)
         self.assertIn("github.repository == 'Donh91/Eksperimenter-framework-'",text)
