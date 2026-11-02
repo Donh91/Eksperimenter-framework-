@@ -41,7 +41,8 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
             or previous.get("contract") != CONTRACT or previous.get("chain_id") != cold.CHAIN_ID
             or previous.get("factory") != cold.FACTORY or previous.get("authority") != "PUBLIC_HOT_SHADOW_ONLY"
             or type(previous.get("last_observed_block")) is not int
-            or previous["last_observed_block"] < 0):
+            or previous["last_observed_block"] < 0
+            or cold.HEX32.fullmatch(previous.get("last_observed_block_hash","")) is None):
             raise RuntimeError("HOT_STATE_UNTRUSTED")
     client.connect()
     safe_head = cold.as_int(client.call("eth_blockNumber", [])) - 2
@@ -50,6 +51,12 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
     prev_end = previous["last_observed_block"] if previous else None
     if prev_end is not None and safe_head <= prev_end:
         return {"status":"NO_NEW_HOT_SAFE_BLOCK","safe_head":safe_head}
+    if prev_end is not None:
+        anchor=client.call("eth_getBlockByNumber",[hex(prev_end),False])
+        if (not isinstance(anchor,dict)
+            or cold.as_int(anchor.get("number"))!=prev_end
+            or str(anchor.get("hash","")).lower()!=previous["last_observed_block_hash"]):
+            raise RuntimeError("HOT_REORG_ANCHOR_MISMATCH_NO_ADVANCE")
     lo = max(0, safe_head-window+1)
     if prev_end is not None:
         # Include the previous boundary to detect unexpected reorgs. Never
@@ -85,6 +92,9 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
     final = client.call("eth_getBlockByNumber", [hex(hi),False])
     if not isinstance(final,dict) or cold.as_int(final.get("number")) != hi:
         raise RuntimeError("HOT_HEAD_NOT_VERIFIED")
+    final_hash=str(final.get("hash","")).lower()
+    if cold.HEX32.fullmatch(final_hash) is None:
+        raise RuntimeError("HOT_HEAD_HASH_INVALID")
     ts = cold.as_int(final.get("timestamp"))
     if ts <= 0 or ts > int(clock().timestamp()) + 60:
         raise RuntimeError("HOT_BLOCK_CLOCK_INVALID")
@@ -95,7 +105,7 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
     receipt = cold.signed(dict(
         contract=CONTRACT,authority="PUBLIC_HOT_SHADOW_ONLY",
         chain_id=cold.CHAIN_ID,factory=cold.FACTORY,topic0=cold.TOPIC0,
-        from_block=lo,to_block=hi,safe_head=safe_head,
+        from_block=lo,to_block=hi,safe_head=safe_head,observed_head_block_hash=final_hash,
         previous_hot_block=prev_end,previous_hot_state_sha=previous.get("sha256") if previous else None,
         complete_scanned_window=True,history_complete=False,
         missed_hot_ranges=gaps,missed_hot_range_count=len(gaps),
@@ -111,7 +121,8 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
     state=cold.signed(dict(
         contract=CONTRACT,authority="PUBLIC_HOT_SHADOW_ONLY",
         chain_id=cold.CHAIN_ID,factory=cold.FACTORY,topic0=cold.TOPIC0,
-        last_observed_block=hi,last_receipt_sha256=receipt["sha256"],
+        last_observed_block=hi,last_observed_block_hash=final_hash,
+        last_receipt_sha256=receipt["sha256"],
         last_run_id=run_id,unobserved_gaps=gaps))
     stem=started.strftime("%Y%m%dT%H%M%SZ")+"_"+run_id
     folder=root/"public_pons_shadow"/"hot"/"runs"/started.strftime("%Y/%m/%d")
