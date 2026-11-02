@@ -51,19 +51,19 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
     prev_end = previous["last_observed_block"] if previous else None
     if prev_end is not None and safe_head < prev_end:
         raise RuntimeError("HOT_HEAD_REGRESSED_NO_ADVANCE")
-    if prev_end is not None and safe_head == prev_end:
-        return {"status":"NO_NEW_HOT_SAFE_BLOCK","safe_head":safe_head}
     if prev_end is not None:
         anchor=client.call("eth_getBlockByNumber",[hex(prev_end),False])
         if (not isinstance(anchor,dict)
             or cold.as_int(anchor.get("number"))!=prev_end
             or str(anchor.get("hash","")).lower()!=previous["last_observed_block_hash"]):
             raise RuntimeError("HOT_REORG_ANCHOR_MISMATCH_NO_ADVANCE")
+    if prev_end is not None and safe_head == prev_end:
+        return {"status":"NO_NEW_HOT_SAFE_BLOCK","safe_head":safe_head}
     lo = max(0, safe_head-window+1)
     if prev_end is not None:
-        # Include the previous boundary to detect unexpected reorgs. Never
-        # pretend that an unobserved multi-hour interval was covered.
-        lo = max(lo, prev_end)
+        # Previous boundary block hash has already been re-verified.
+        # Exclude it from emitted events to prevent duplicate HOT observations.
+        lo = max(lo, prev_end+1)
     hi = safe_head
     gaps = list(previous.get("unobserved_gaps", [])) if previous else []
     if prev_end is not None and lo > prev_end + 1:
