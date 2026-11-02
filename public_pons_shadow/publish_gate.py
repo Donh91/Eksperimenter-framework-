@@ -57,6 +57,10 @@ def validate(stage,root,run_id,checkout_sha):
     for file in files:
         if file.is_symlink() or not file.resolve().is_relative_to(stage.resolve()):
             raise ValueError("PONS_SYMLINK_OR_TRAVERSAL")
+        for ancestor in file.parents:
+            if ancestor==stage: break
+            if ancestor.is_symlink():
+                raise ValueError("PONS_SYMLINKED_STAGE_ANCESTOR")
     expected=set()
     updates=[]
     for lane in ("hot","cold"):
@@ -147,6 +151,10 @@ def validate(stage,root,run_id,checkout_sha):
             raise ValueError("PONS_COLLECTOR_CHANGED_AFTER_CAPTURE")
     for rel in updates:
         dest=root/rel
+        for ancestor in dest.parents:
+            if ancestor==root: break
+            if ancestor.is_symlink():
+                raise ValueError("PONS_SYMLINKED_DESTINATION_ANCESTOR")
         if "/runs/" in rel.as_posix() and dest.exists():
             raise ValueError("PONS_IMMUTABLE_RUN_COLLISION")
     return updates
