@@ -50,50 +50,6 @@ jobs:
           python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py
           python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_workflow_security_v1 -v
 
-  live-source-canary:
-    # Bounded one-off PONS #120 evaluation on this original PR only.
-    # No persistent artifact, write token, Git push, private Alpha state or API key.
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 14
-    runs-on: ubuntu-latest
-    timeout-minutes: 6
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
-      - name: Probe 60k latest-safe blocks through actual Robinhood RPC, read-only
-        shell: bash
-        run: |
-          set -euo pipefail
-          source_sha=$(git rev-parse --verify HEAD)
-          timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" \
-            python public_pons_shadow/hot_collector.py --repo-root . > /tmp/pons-hot-canary.json
-          python - <<'PY'
-          import json,pathlib
-          result=json.loads(pathlib.Path('/tmp/pons-hot-canary.json').read_text())
-          assert result.get('status')=='PUBLIC_HOT_CAPTURED_UNPUBLISHED', result
-          receipt=json.loads(pathlib.Path(result['receipt']).read_text())
-          assert receipt['authority']=='PUBLIC_HOT_SHADOW_ONLY'
-          assert receipt['private_source_admitted'] is False
-          assert receipt['provider_first_known_verified'] is False
-          assert receipt['canonical_census_complete'] is False
-          assert receipt['github_first_publication_verified'] is False
-          assert receipt['to_block']==receipt['safe_head']
-          assert receipt['complete_scanned_window'] is True
-          assert receipt['observed_end_block_age_seconds']>=0
-          print('PUBLIC_PONS_HOT_LIVE_CANARY_READONLY_PASS',
-                'from_block',receipt['from_block'],
-                'to_block',receipt['to_block'],
-                'block_age_seconds',receipt['observed_end_block_age_seconds'],
-                'events',receipt['event_count'],
-                'rpc_log_calls',receipt['rpc_log_calls'],
-                'provider',receipt['rpc_url'])
-          PY
-
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
