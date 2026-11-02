@@ -33,6 +33,25 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertNotIn("collector.py --repo-root",publish)
         self.assertIn("python public_pons_shadow/publish_gate.py",publish)
 
+    def test_artifact_transfer_uses_verified_immutable_action_commits(self):
+        raw=WORKFLOW.read_text()
+        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",raw)
+        self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",raw)
+        self.assertNotIn("uses: actions/upload-artifact@v4",raw)
+        self.assertNotIn("uses: actions/download-artifact@v4",raw)
+
+    def test_publisher_rejects_remote_cursor_change_before_push(self):
+        raw=WORKFLOW.read_text()
+        publisher=raw.split("\n  publish:\n",1)[1]
+        self.assertIn("baseline_main=$(git rev-parse HEAD)",publisher)
+        self.assertIn("git fetch origin main",publisher)
+        self.assertIn('source_blob "$baseline_main" "$path"',publisher)
+        self.assertIn('source_blob origin/main "$path"',publisher)
+        self.assertIn("PUBLIC_PONS_CONCURRENT_CURSOR_CHANGE_NO_OVERWRITE",publisher)
+        self.assertLess(publisher.index("PUBLIC_PONS_CONCURRENT_CURSOR_CHANGE_NO_OVERWRITE"),publisher.index("git push origin HEAD:main"))
+        for path in ("public_pons_shadow/state.json","public_pons_shadow/hot_state.json"):
+            self.assertIn(path,publisher)
+
     def test_no_untrusted_privileged_events(self):
         raw=WORKFLOW.read_text()
         self.assertNotIn("pull_request_target:",raw)
