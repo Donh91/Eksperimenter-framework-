@@ -48,3 +48,25 @@ At reliable hourly success, the current ~910k backlog would require ~36 hours to
 6. Separate private Alpha #120/#203 source authentication and scientific admission. No retrospective first-known or trading/alert authority.
 
 Private Actions billed-minute savings, future provider availability and production end-to-end performance remain UNKNOWN.
+
+## Actual read-only, non-persistent source canary proof (2026-11-02)
+
+These two genuine GitHub pull_request-triggered jobs used the original PR #14
+with contents:read / persist-credentials:false and executed real public RPC
+capture from Robinhood Chain. No output committed, no private scientific
+admission. The temporary live-source-canary job was removed from the final
+production candidate after collecting reproducible read-only evidence.
+
+| UTC observed | Safe source range | Events | RPC log calls | Terminal block age | Status |
+|---|---|---:|---:|---:|---|
+| 11:37:15 | 104125512..104185511 | 113 | 30 | 1 second | PASS |
+| 11:39:24 | 104126718..104186717 | 112 | 30 | 1 second | PASS |
+
+Both used https://rpc.mainnet.chain.robinhood.com and left original public
+main COLD cursor untouched. Adjacent ephemeral HOT windows intentionally
+have overlapping source blocks; **not two independent canonical first-known
+runs and not 48h natural source stability**.
+
+Final PR requires new exact-head substantive hosted CI and separate publisher
+release proof. The public main writing workflow has not been exercised in
+this draft and still has no enforced rulesets.
