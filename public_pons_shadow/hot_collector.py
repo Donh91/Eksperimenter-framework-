@@ -20,7 +20,7 @@ except ImportError:
 
 STATE = Path("public_pons_shadow/hot_state.json")
 CONTRACT = "PUBLIC_PONS_V2_HOT_SHADOW_V1"
-WINDOW = 12000
+WINDOW = 60000
 MAX_EVENTS = cold.MAX_EVENTS
 
 
