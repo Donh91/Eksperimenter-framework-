@@ -42,7 +42,9 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn("cancel-in-progress: false",raw)
         self.assertIn("PUBLIC_PONS_COLD_DEGRADED_NO_CURSOR_ADVANCE",raw)
         self.assertIn("PUBLIC_PONS_HOT_DEGRADED_NO_CURSOR_ADVANCE",raw)
-        self.assertEqual(raw.count("timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA"),2)
+        self.assertEqual(raw.count("timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA"),3)
+        self.assertIn("live-source-canary:",raw)
+        self.assertIn("github.event.pull_request.number == 14",raw)
         self.assertIn("rm -f /tmp/pons_cold.json",raw)
         self.assertIn("rm -f /tmp/pons_hot.json",raw)
 
