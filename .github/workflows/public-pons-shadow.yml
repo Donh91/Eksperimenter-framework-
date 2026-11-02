@@ -26,7 +26,7 @@ permissions:
 
 # Existing public execution-plane writer uses this group. Never cancel evidence.
 concurrency:
-  group: experiment-execution-plane
+  group: ${{ github.event_name == 'pull_request' && format('public-pons-review-{0}', github.event.pull_request.number) || 'experiment-execution-plane' }}
   cancel-in-progress: false
 
 jobs:
