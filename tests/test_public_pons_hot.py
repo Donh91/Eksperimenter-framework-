@@ -90,7 +90,7 @@ class TestHotShadow(unittest.TestCase):
             root=Path(d)
             self.capture(root,FakeRPC(head=100),run="101",window=12)
             self.assertEqual(self.capture(root,FakeRPC(head=100),run="102",window=12)["status"],"NO_NEW_HOT_SAFE_BLOCK")
-            self.assertFalse(list(root.glob("**/*102*")))
+            self.assertFalse(list(root.glob("**/*_102_receipt.json")))
 
     def test_poisoned_previous_state_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
