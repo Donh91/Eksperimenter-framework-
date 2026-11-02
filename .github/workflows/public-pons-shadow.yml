@@ -19,6 +19,7 @@ on:
       - '.github/workflows/public-pons-shadow.yml'
       - 'public_pons_shadow/hot_collector.py'
       - 'public_pons_shadow/publish_gate.py'
+      - 'tests/test_public_pons_shadow.py'
       - 'tests/test_public_pons_hot.py'
       - 'tests/test_public_pons_workflow_security_v1.py'
 
