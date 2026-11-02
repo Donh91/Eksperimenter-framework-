@@ -61,7 +61,7 @@ class TestHotShadow(unittest.TestCase):
             root=Path(d)
             self.capture(root,FakeRPC(head=100),run="101",window=12)
             out=self.capture(root,FakeRPC(head=107),run="102",window=12)
-            self.assertEqual((out["from_block"],out["to_block"]),(98,105))
+            self.assertEqual((out["from_block"],out["to_block"]),(99,105))
             self.assertEqual(out["missed_hot_range_count"],0)
 
     def test_skipped_schedule_creates_explicit_gap(self):
@@ -101,6 +101,21 @@ class TestHotShadow(unittest.TestCase):
                 self.capture(root,FakeRPC(head=96),run="102",window=12)
             self.assertEqual((root/hot.STATE).read_bytes(),before)
             self.assertFalse(list(root.glob("**/*_102_receipt.json")))
+
+    def test_equal_head_reorg_is_not_misclassified_as_no_new_block(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            self.capture(root,FakeRPC(head=100),run="101",window=12)
+            class SameHeightReorgRPC(FakeRPC):
+                def __call__(self,url,method,args):
+                    result=super().__call__(url,method,args)
+                    if method=="eth_getBlockByNumber":
+                        result["hash"]="0x"+"c"*64
+                    return result
+            before=(root/hot.STATE).read_bytes()
+            with self.assertRaisesRegex(RuntimeError,"HOT_REORG_ANCHOR_MISMATCH_NO_ADVANCE"):
+                self.capture(root,SameHeightReorgRPC(head=100),run="102",window=12)
+            self.assertEqual((root/hot.STATE).read_bytes(),before)
 
     def test_reorg_at_previous_hot_cursor_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
