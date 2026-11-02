@@ -49,7 +49,9 @@ def hot_capture(root, client, run_id, checkout_sha, clock=cold.now, window=WINDO
     if safe_head < 0:
         raise RuntimeError("HOT_SAFE_HEAD_INVALID")
     prev_end = previous["last_observed_block"] if previous else None
-    if prev_end is not None and safe_head <= prev_end:
+    if prev_end is not None and safe_head < prev_end:
+        raise RuntimeError("HOT_HEAD_REGRESSED_NO_ADVANCE")
+    if prev_end is not None and safe_head == prev_end:
         return {"status":"NO_NEW_HOT_SAFE_BLOCK","safe_head":safe_head}
     if prev_end is not None:
         anchor=client.call("eth_getBlockByNumber",[hex(prev_end),False])
