@@ -1,68 +1,200 @@
 name: Public Pons V2 Factory Shadow
 
-# Temporary separate PUBLIC execution plane. All RPC inputs are public chain
-# factory logs, exhaustive for a bounded block range; no private Alpha source.
+# Two independent PUBLIC data streams: recent HOT and historical COLD.
+# No secrets, no private Alpha watchlist, no canonical source authority.
+# CODEOWNERS names the reviewer; actual enforcement needs a compatible repository ruleset.
 on:
-  # Source/workflow changes can prove their own runtime immediately after merge.
-  # Data-only commits under public_pons_shadow/runs and state.json do NOT retrigger.
   push:
     branches: [main]
     paths:
       - '.github/workflows/public-pons-shadow.yml'
       - 'public_pons_shadow/collector.py'
+      - 'public_pons_shadow/hot_collector.py'
+      - 'public_pons_shadow/publish_gate.py'
   schedule:
     - cron: '27 * * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/public-pons-shadow.yml'
+      - 'public_pons_shadow/hot_collector.py'
+      - 'public_pons_shadow/publish_gate.py'
+      - 'tests/test_public_pons_shadow.py'
+      - 'tests/test_public_pons_hot.py'
+      - 'tests/test_public_pons_workflow_security_v1.py'
 
 permissions:
   contents: read
 
-# The existing Experiment Execution Plane uses this exact same writer group.
-# It serializes this repo's two known public main writers, not other actors.
+# Existing public execution-plane writer uses this group. Never cancel evidence.
 concurrency:
-  group: experiment-execution-plane
+  group: ${{ github.event_name == 'pull_request' && format('public-pons-review-{0}', github.event.pull_request.number) || 'experiment-execution-plane' }}
   cancel-in-progress: false
 
 jobs:
-  public-shadow:
-    if: github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
+  contract-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Execute old source controls, new HOT controls, and workflow security regression
+        run: |
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_workflow_security_v1 -v
+
+  collect:
+    if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      has_data: ${{ steps.stage.outputs.has_data }}
+      checkout_sha: ${{ steps.stage.outputs.checkout_sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # exact successful public run 41213409418
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Validate public-source scripts, no writer credential
+        run: |
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py
+          python public_pons_shadow/collector.py --validate-only
+          python public_pons_shadow/hot_collector.py --validate-only
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot -v
+      - name: Independently capture HOT then COLD, degrade visibly on provider failures
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha=$(git rev-parse --verify HEAD)
+          echo "checkout_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          if ! (timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/hot_collector.py --repo-root . > /tmp/pons_hot.json); then
+            rm -f /tmp/pons_hot.json
+            echo "::warning::PUBLIC_PONS_HOT_DEGRADED_NO_CURSOR_ADVANCE"
+          fi
+          if ! (timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/collector.py --repo-root . > /tmp/pons_cold.json); then
+            rm -f /tmp/pons_cold.json
+            echo "::warning::PUBLIC_PONS_COLD_DEGRADED_NO_CURSOR_ADVANCE"
+          fi
+          python - <<'PY'
+          import json,os,pathlib,re,shutil
+          stage=pathlib.Path('/tmp/pons-stage')
+          any_data=False
+          any_valid=False
+          for lane in ('hot','cold'):
+              f=pathlib.Path('/tmp/pons_'+lane+'.json')
+              if not f.is_file():continue
+              result=json.loads(f.read_text())
+              if result.get('status') in ('NO_NEW_HOT_SAFE_BLOCK','NO_NEW_SAFE_BLOCK'):
+                  any_valid=True
+                  continue
+              if result.get('status') not in ('PUBLIC_HOT_CAPTURED_UNPUBLISHED','PUBLIC_SHADOW_CAPTURED_UNPUBLISHED'):
+                  raise RuntimeError('PONS_UNKNOWN_LANE_RESULT')
+              any_valid=True
+              rel=pathlib.PurePosixPath(result['receipt'])
+              pattern=(r'public_pons_shadow/hot/runs/' if lane=='hot'
+                       else r'public_pons_shadow/runs/')
+              if re.fullmatch(pattern+r'\d{4}/\d{2}/\d{2}/\d{8}T\d{6}Z_\d{1,20}_receipt\.json',str(rel)) is None:
+                  raise RuntimeError('PONS_CAPTURE_RECEIPT_PATH_INVALID')
+              state=pathlib.Path('public_pons_shadow/hot_state.json' if lane=='hot' else 'public_pons_shadow/state.json')
+              receipt=pathlib.Path(str(rel))
+              events=receipt.with_name(receipt.name.replace('_receipt.json','_events.json'))
+              for src in (state,receipt,events):
+                  if not src.is_file() or src.is_symlink() or src.stat().st_size>2_000_000:
+                      raise RuntimeError('PONS_STAGE_OUTPUT_UNSAFE')
+                  target=stage/src
+                  target.parent.mkdir(parents=True,exist_ok=True)
+                  shutil.copyfile(src,target)
+              any_data=True
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('has_data='+('true' if any_data else 'false')+'\n')
+          if not any_valid:raise RuntimeError('BOTH_PUBLIC_PONS_LANES_FAILED')
+          print('PUBLIC_PONS_CAPTURE_RESULT HOT_COLD_INDEPENDENT has_data='+str(any_data))
+          PY
+      - name: Upload strictly bounded public data files, not credentials
+        if: steps.stage.outputs.has_data == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # verified upstream v4 ref 2026-11-02
+        with:
+          name: public-pons-bounded-capture
+          path: /tmp/pons-stage/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: collect
+    if: needs.collect.result == 'success' && needs.collect.outputs.has_data == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    permissions:
+      contents: write
+    env:
+      SOURCE_CHECKOUT_SHA: ${{ needs.collect.outputs.checkout_sha }}
+    steps:
+      # The writer does NOT invoke the network collectors or their tests.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: true
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # exact successful public run 41213409418
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # verified upstream v4 ref 2026-11-02
         with:
-          python-version: '3.12'
-      - name: Validate bounded collector and negative controls
+          name: public-pons-bounded-capture
+          path: /tmp/pons-stage/
+      - name: Fail-closed provenance and independent cursors
+        shell: bash
         run: |
-          python -m py_compile public_pons_shadow/collector.py tests/test_public_pons_shadow.py
-          python public_pons_shadow/collector.py --validate-only
-          python -m unittest tests.test_public_pons_shadow -v
-      - name: Capture exhaustive public Pons V2 factory events
-        run: |
-          GITHUB_CHECKOUT_SHA=$(git rev-parse --verify HEAD) python public_pons_shadow/collector.py --repo-root .
-      - name: Commit public source and verify exact remote main blobs
+          set -euo pipefail
+          python public_pons_shadow/publish_gate.py --stage-dir /tmp/pons-stage \
+            --repo-root . --run-id "$GITHUB_RUN_ID" --checkout-sha "$SOURCE_CHECKOUT_SHA"
+      - name: Publish only verified public source files, and remote-readback exact blobs
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'public-pons-shadow-bot'
           git config user.email 'public-pons-shadow-bot@users.noreply.github.com'
-          git add -A -- public_pons_shadow/state.json public_pons_shadow/runs
+          git add -A -- public_pons_shadow
+          if git diff --cached --name-only | grep -Ev '^public_pons_shadow/(state\.json|hot_state\.json|runs/|hot/runs/)' ; then
+            echo 'UNEXPECTED_PUBLIC_PONS_WRITE_PATH'
+            exit 1
+          fi
           if git diff --cached --quiet; then
             echo 'NO_NEW_PUBLIC_SAFE_BLOCK'
             exit 0
           fi
-          git commit -m "source: public Pons shadow $GITHUB_RUN_ID"
+          baseline_main=$(git rev-parse HEAD)
+          git commit -m "source: bounded public HOT/COLD shadow $GITHUB_RUN_ID"
           changed=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          # A different source writer may update main between checkout, source
+          # validation and push. Never rebase stale cursors onto newer evidence.
+          source_blob() {
+            local ref="$1" path="$2"
+            git rev-parse --verify "$ref:$path" 2>/dev/null || printf '%s\n' MISSING
+          }
           pushed=false
           for attempt in 1 2 3; do
             git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            for path in public_pons_shadow/state.json public_pons_shadow/hot_state.json; do
+              before=$(source_blob "$baseline_main" "$path")
+              remote=$(source_blob origin/main "$path")
+              if [ "$before" != "$remote" ]; then
+                echo "PUBLIC_PONS_CONCURRENT_CURSOR_CHANGE_NO_OVERWRITE:$path"
+                exit 1
+              fi
+            done
             if git pull --rebase origin main && git push origin HEAD:main; then
               pushed=true
               break
@@ -81,4 +213,4 @@ jobs:
               exit 1
             fi
           done <<< "$changed"
-          echo "PUBLIC_PONS_SHADOW_READBACK_PASS $GITHUB_RUN_ID"
+          echo "PUBLIC_PONS_HOT_COLD_SHADOW_READBACK_PASS $GITHUB_RUN_ID"

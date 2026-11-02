@@ -142,7 +142,8 @@ class WorkflowPolicyTests(unittest.TestCase):
     def test_public_only_workflow_authority(self):
         text=Path(".github/workflows/public-pons-shadow.yml").read_text()
         self.assertIn("name: Public Pons V2 Factory Shadow",text)
-        self.assertIn("group: experiment-execution-plane",text)
+        self.assertIn("experiment-execution-plane",text)
+        self.assertIn("public-pons-review-",text)
         self.assertIn("cancel-in-progress: false",text)
         self.assertIn("github.ref == 'refs/heads/main'",text)
         self.assertIn("github.repository == 'Donh91/Eksperimenter-framework-'",text)
@@ -151,8 +152,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("secrets.",text)
         self.assertNotIn("pull_request_target:",text)
         self.assertNotIn("workflow_run:",text)
-        self.assertIn("GITHUB_CHECKOUT_SHA=$(git rev-parse --verify HEAD)",text)
-        self.assertIn("PUBLIC_PONS_SHADOW_READBACK_PASS",text)
+        self.assertIn("source_sha=$(git rev-parse --verify HEAD)",text)
+        self.assertIn("persist-credentials: false",text)
+        self.assertEqual(text.count("contents: write"),1)
+        self.assertIn("PUBLIC_PONS_HOT_COLD_SHADOW_READBACK_PASS",text)
         self.assertIn("push:\n    branches: [main]",text)
         self.assertIn("'.github/workflows/public-pons-shadow.yml'",text)
         self.assertIn("'public_pons_shadow/collector.py'",text)
@@ -181,12 +184,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         def protected(source):
             return ("secrets." not in source and "pull_request_target:" not in source
                     and "github.ref == 'refs/heads/main'" in source
-                    and "group: experiment-execution-plane" in source)
+                    and "experiment-execution-plane" in source
+                    and "public-pons-review-" in source)
         self.assertTrue(protected(text))
         self.assertFalse(protected(text+"\n# secrets.LEAK"))
         self.assertFalse(protected(text.replace("workflow_dispatch:", "pull_request_target:")))
         self.assertFalse(protected(text.replace("refs/heads/main","refs/heads/any")))
-        self.assertFalse(protected(text.replace("group: experiment-execution-plane","group: random")))
+        self.assertFalse(protected(text.replace("experiment-execution-plane","random")))
 
 
 if __name__=="__main__":

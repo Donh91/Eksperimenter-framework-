@@ -1,0 +1,10 @@
+# Public Pons producer security ownership, owner review must be ENFORCED by active ruleset.
+# CODEOWNERS alone does not protect unprotected main, nor does it authenticate RPC.
+/.github/CODEOWNERS @Donh91
+/.github/workflows/ @Donh91
+/public_pons_shadow/collector.py @Donh91
+/public_pons_shadow/hot_collector.py @Donh91
+/public_pons_shadow/publish_gate.py @Donh91
+/tests/test_public_pons_shadow.py @Donh91
+/tests/test_public_pons_hot.py @Donh91
+/tests/test_public_pons_workflow_security_v1.py @Donh91
