@@ -163,8 +163,11 @@ jobs:
           set -euo pipefail
           git config user.name 'public-pons-shadow-bot'
           git config user.email 'public-pons-shadow-bot@users.noreply.github.com'
-          git add -- public_pons_shadow/state.json public_pons_shadow/hot_state.json \
-            public_pons_shadow/runs public_pons_shadow/hot/runs
+          git add -A -- public_pons_shadow
+          if git diff --cached --name-only | grep -Ev '^public_pons_shadow/(state\.json|hot_state\.json|runs/|hot/runs/)' ; then
+            echo 'UNEXPECTED_PUBLIC_PONS_WRITE_PATH'
+            exit 1
+          fi
           if git diff --cached --quiet; then
             echo 'NO_NEW_PUBLIC_SAFE_BLOCK'
             exit 0
