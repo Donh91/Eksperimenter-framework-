@@ -2,6 +2,7 @@ name: Public Pons V2 Factory Shadow
 
 # Two independent PUBLIC data streams: recent HOT and historical COLD.
 # No secrets, no private Alpha watchlist, no canonical source authority.
+# CODEOWNERS names the reviewer; actual enforcement needs a compatible repository ruleset.
 on:
   push:
     branches: [main]
