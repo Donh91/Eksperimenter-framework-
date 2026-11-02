@@ -92,6 +92,21 @@ class TestHotShadow(unittest.TestCase):
             self.assertEqual(self.capture(root,FakeRPC(head=100),run="102",window=12)["status"],"NO_NEW_HOT_SAFE_BLOCK")
             self.assertFalse(list(root.glob("**/*_102_receipt.json")))
 
+    def test_reorg_at_previous_hot_cursor_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            self.capture(root,FakeRPC(head=100),run="101",window=12)
+            class ReorgRPC(FakeRPC):
+                def __call__(self,url,method,args):
+                    result=super().__call__(url,method,args)
+                    if method=="eth_getBlockByNumber" and args[0]==hex(98):
+                        result["hash"]="0x"+"c"*64
+                    return result
+            before=(root/hot.STATE).read_bytes()
+            with self.assertRaisesRegex(RuntimeError,"HOT_REORG_ANCHOR_MISMATCH_NO_ADVANCE"):
+                self.capture(root,ReorgRPC(head=105),run="102",window=12)
+            self.assertEqual((root/hot.STATE).read_bytes(),before)
+
     def test_poisoned_previous_state_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)
