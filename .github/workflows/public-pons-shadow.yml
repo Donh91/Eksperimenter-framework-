@@ -50,6 +50,54 @@ jobs:
           python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py
           python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_workflow_security_v1 -v
 
+  cold-capacity-canary:
+    # EXACT original PR #15 read-only capacity test. Never runs on main.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 15
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Read-only real RPC probe of 300k consecutive historical blocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 220s python - <<'PY'
+          import json,os,pathlib,shutil,tempfile,time,subprocess
+          from public_pons_shadow import collector as c
+          with tempfile.TemporaryDirectory() as temp:
+              root=pathlib.Path(temp)
+              (root/c.STATE).parent.mkdir(parents=True,exist_ok=True)
+              shutil.copyfile(c.STATE,root/c.STATE)
+              current=json.loads((root/c.STATE).read_text())
+              old=int(current['last_scanned_block'])
+              c.MAX_SCAN=300000
+              start=time.monotonic()
+              sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+              out=c.collect(root,c.Client(),os.environ['GITHUB_RUN_ID'],sha,
+                            max_scan=300000,chunk=2000)
+              elapsed=round(time.monotonic()-start,2)
+              receipt=json.loads((root/out['receipt']).read_text())
+              assert receipt['from_block']==old+1
+              assert receipt['to_block']-receipt['from_block']+1==300000
+              assert receipt['complete_bounded_range'] is True
+              assert receipt['private_source_admitted'] is False
+              assert receipt['provider_first_known_verified'] is False
+              assert receipt['rpc_log_calls']==150
+              assert elapsed<220
+              print('PONS_COLD_300K_REAL_RPC_CANARY_PASS',
+                    'blocks',300000,'seconds',elapsed,
+                    'events',receipt['event_count'],'calls',receipt['rpc_log_calls'],
+                    'remaining_blocks',receipt['remaining_blocks'],
+                    'provider',receipt['rpc_url'])
+          PY
+
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
