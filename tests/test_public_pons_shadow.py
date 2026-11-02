@@ -184,12 +184,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         def protected(source):
             return ("secrets." not in source and "pull_request_target:" not in source
                     and "github.ref == 'refs/heads/main'" in source
-                    and "group: experiment-execution-plane" in source)
+                    and "experiment-execution-plane" in source
+                    and "public-pons-review-" in source)
         self.assertTrue(protected(text))
         self.assertFalse(protected(text+"\n# secrets.LEAK"))
         self.assertFalse(protected(text.replace("workflow_dispatch:", "pull_request_target:")))
         self.assertFalse(protected(text.replace("refs/heads/main","refs/heads/any")))
-        self.assertFalse(protected(text.replace("group: experiment-execution-plane","group: random")))
+        self.assertFalse(protected(text.replace("experiment-execution-plane","random")))
 
 
 if __name__=="__main__":
