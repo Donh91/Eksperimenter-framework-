@@ -95,6 +95,27 @@ class TestPublicPonsSecurity(unittest.TestCase):
                 for out in (hot_out,cold_out):
                     self.assertFalse(json.loads((root/out["receipt"]).read_text())[key])
 
+    def test_cold_only_stage_is_accepted_without_hot_assumptions(self):
+        from public_pons_shadow import collector as cold
+        with tempfile.TemporaryDirectory() as d:
+            base=Path(d)
+            root=base/"source"
+            root.mkdir()
+            out=cold.collect(root,cold.Client(FakeRPC(head=100)),
+                             "100",SHA,clock=lambda:NOW,bootstrap=12,max_scan=12,chunk=3)
+            receipt=Path(out["receipt"])
+            events=receipt.with_name(receipt.name.replace("_receipt.json","_events.json"))
+            stage=base/"stage"
+            for rel in (cold.STATE,receipt,events):
+                target=stage/rel
+                target.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(root/rel,target)
+            publisher=base/"publisher"
+            (publisher/"public_pons_shadow").mkdir(parents=True)
+            updates=self.validate(stage,publisher)
+            self.assertEqual(len(updates),3)
+            self.assertFalse(json.loads((stage/receipt).read_text())["private_source_admitted"])
+
     def test_genuine_hot_stage_is_unadmitted(self):
         with tempfile.TemporaryDirectory() as d:
             stage,publisher,receipt=self.stage_hot(Path(d))
