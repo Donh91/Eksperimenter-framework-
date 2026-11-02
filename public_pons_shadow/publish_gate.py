@@ -108,6 +108,9 @@ def validate(stage,root,run_id,checkout_sha):
                 or receipt.get("history_complete") is not False
                 or receipt.get("canonical_census_complete") is not False
                 or receipt.get("github_first_publication_verified") is not False
+                or not isinstance(state.get("last_observed_block_hash"),str)
+                or re.fullmatch(r"0x[a-f0-9]{64}",state.get("last_observed_block_hash","")) is None
+                or receipt.get("observed_head_block_hash")!=state.get("last_observed_block_hash")
                 or not isinstance(receipt.get("missed_hot_ranges"),list)
                 or receipt.get("missed_hot_range_count")!=len(receipt["missed_hot_ranges"])):
                 raise ValueError("PONS_HOT_CONTINUITY_INVALID")
