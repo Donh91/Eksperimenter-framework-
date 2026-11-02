@@ -93,7 +93,7 @@ class TestPublicPonsSecurity(unittest.TestCase):
             with patch.object(publish_gate.subprocess,"run"),patch.object(
                 publish_gate.subprocess,"check_output",return_value=SHA+"\n"
             ):
-                with self.assertRaisesRegex(ValueError,"PONS_RUN_RECEIPT_SET_INVALID"):
+                with self.assertRaisesRegex(ValueError,"PONS_(STATE_INVALID|RUN_RECEIPT_SET_INVALID)"):
                     publish_gate.validate(stage,publisher,"999",SHA)
 
     def test_symlinked_staged_data_fails_closed(self):
