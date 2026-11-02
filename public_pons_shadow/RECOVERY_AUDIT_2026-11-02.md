@@ -70,3 +70,33 @@ runs and not 48h natural source stability**.
 Final PR requires new exact-head substantive hosted CI and separate publisher
 release proof. The public main writing workflow has not been exercised in
 this draft and still has no enforced rulesets.
+
+## PONS #120 bounded COLD capacity canary, 2 November 2026
+
+Source: GitHub Actions public PR #15, genuine read-only RPC job
+[run 41453736034](https://github.com/Donh91/Eksperimenter-framework-/actions/runs/41453736034),
+conclusion SUCCESS. Tested 300,000 contiguous historical Robinhood Chain blocks,
+150 calls to eth_getLogs, 407 factory events, **12.1 seconds wall clock**,
+final receipt remaining blocks 744,026 **inside temporary runner directory only**.
+No remote main cursor was modified by this benchmark. Provider used:
+https://rpc.mainnet.chain.robinhood.com. A single successful canary is
+not a 48-72h provider reliability guarantee and does not authenticate first-known.
+
+The old 60,000-block cap required an average successful run interval below
+approximately 104 minutes just to avoid more backlog (historical source growth
+approximately 34,650 blocks/hour). 300,000 blocks/run supports up to about
+8.7 hours between successful runs **at the measured chain growth rate**, but
+only if the provider and publisher actually complete each run. This is a
+performance sensitivity calculation, not a future cron delivery promise.
+
+The candidate implementation preserves original HOT max window 60,000,
+separate COLD cursor and public-shadow authority. Source RPC failures after a
+strictly complete contiguous COLD prefix can publish only that prefix and
+resume from its next block; failure before the first fully processed chunk
+must not advance state. Invalid logs/chain IDs must still fail closed.
+
+Release requires exact-head substantive hosted tests, cautious first real
+300k production capture, on-main immutable receipts with remote readback,
+then continuing monitoring for scheduling gaps, actual provider 429/errors,
+source time, and COLD backlog slope. Private canonical collector remains
+independent and unchanged. No private Alpha trades or source authority.

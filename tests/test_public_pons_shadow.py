@@ -125,6 +125,54 @@ class PublicPonsTests(unittest.TestCase):
                     self.capture(Path(d),RPC())
             self.assertFalse((Path(d)/p.STATE).exists())
 
+    def test_after_two_complete_chunks_provider_outage_preserves_only_full_prefix(self):
+        class ProviderDownAfterTwoChunks(RPC):
+            def __call__(self,url,method,args):
+                if method=="eth_getLogs" and int(args[0]["fromBlock"],16)>=95:
+                    raise RuntimeError("RPC_429_TRANSIENT")
+                return super().__call__(url,method,args)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            out=self.capture(root,ProviderDownAfterTwoChunks(),run="901",limit=10)
+            receipt=json.loads((root/out["receipt"]).read_text())
+            self.assertEqual((receipt["from_block"],receipt["to_block"]),(89,94))
+            self.assertEqual(receipt["remaining_blocks"],4)
+            self.assertEqual(receipt["rpc_log_calls"],2)
+            self.assertTrue(receipt["complete_bounded_range"])
+            self.assertFalse(receipt["private_source_admitted"])
+            self.assertEqual(p.load_state(root)["last_scanned_block"],94)
+            later=self.capture(root,RPC(),run="902",limit=10)
+            later_receipt=json.loads((root/later["receipt"]).read_text())
+            self.assertEqual((later_receipt["from_block"],later_receipt["to_block"]),(95,98))
+            self.assertEqual(p.load_state(root)["last_scanned_block"],98)
+
+    def test_failure_on_first_chunk_still_never_advances(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            with self.assertRaisesRegex(RuntimeError,"BOTH_PUBLIC_RPC_ENDPOINTS_FAILED"):
+                self.capture(root,RPC(bad=True),run="903",limit=10)
+            self.assertFalse((root/p.STATE).exists())
+            self.assertFalse(list(root.rglob("*_receipt.json")))
+
+    def test_malformed_followup_chunk_does_not_publish_partial(self):
+        class WrongResultAfterFirstChunk(RPC):
+            def __call__(self,url,method,args):
+                if method=="eth_getLogs" and int(args[0]["fromBlock"],16)>=92:
+                    return {"untrusted":"not_a_list"}
+                return super().__call__(url,method,args)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            with self.assertRaisesRegex(RuntimeError,"LOG_RESULT_NOT_ARRAY"):
+                self.capture(root,WrongResultAfterFirstChunk(),run="904",limit=10)
+            self.assertFalse((root/p.STATE).exists())
+
+    def test_proven_max_scan_limit_and_overlimit_rejected(self):
+        self.assertEqual(p.MAX_SCAN,300000)
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(ValueError,"SCAN_LIMIT_INVALID"):
+                p.collect(Path(d),p.Client(RPC()),"905",SHA,clock=lambda:NOW,
+                          max_scan=300001)
+
     def test_immutable_same_run_cannot_rewrite(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);self.capture(root,RPC(),run="1")
