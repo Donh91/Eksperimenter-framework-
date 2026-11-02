@@ -79,11 +79,11 @@ jobs:
           set -euo pipefail
           source_sha=$(git rev-parse --verify HEAD)
           echo "checkout_sha=$source_sha" >> "$GITHUB_OUTPUT"
-          if ! (GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/hot_collector.py --repo-root . > /tmp/pons_hot.json); then
+          if ! (timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/hot_collector.py --repo-root . > /tmp/pons_hot.json); then
             rm -f /tmp/pons_hot.json
             echo "::warning::PUBLIC_PONS_HOT_DEGRADED_NO_CURSOR_ADVANCE"
           fi
-          if ! (GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/collector.py --repo-root . > /tmp/pons_cold.json); then
+          if ! (timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/collector.py --repo-root . > /tmp/pons_cold.json); then
             rm -f /tmp/pons_cold.json
             echo "::warning::PUBLIC_PONS_COLD_DEGRADED_NO_CURSOR_ADVANCE"
           fi
