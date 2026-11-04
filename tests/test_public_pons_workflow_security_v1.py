@@ -19,6 +19,18 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn("python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_workflow_security_v1 -v",raw)
         self.assertIn("contents: read",raw)
 
+    def test_public_half_hour_hot_does_not_duplicate_private_or_cold_source(self):
+        raw=WORKFLOW.read_text()
+        self.assertIn("- cron: '27 * * * *'", raw)
+        self.assertIn("- cron: '57 * * * *'", raw)
+        self.assertIn("PUBLIC_PONS_SCHEDULE_SLOT: ${{ github.event.schedule }}", raw)
+        self.assertIn('"$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *"', raw)
+        self.assertIn("PUBLIC_PONS_COLD_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT", raw)
+        self.assertEqual(raw.count("python public_pons_shadow/hot_collector.py --repo-root ."), 1)
+        self.assertEqual(raw.count("python public_pons_shadow/collector.py --repo-root ."), 1)
+        self.assertNotIn("Donh91/secrets", raw)
+        self.assertNotIn("OPENAI_API_KEY", raw)
+
     def test_only_publish_job_has_write_token(self):
         raw=WORKFLOW.read_text()
         self.assertEqual(raw.count("contents: write"),1)

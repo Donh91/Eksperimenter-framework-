@@ -12,7 +12,10 @@ on:
       - 'public_pons_shadow/hot_collector.py'
       - 'public_pons_shadow/publish_gate.py'
   schedule:
+    # Public-only HOT source observation twice per hour; COLD remains hourly.
+    # GitHub schedule delivery is best effort and never guarantees full LIVE coverage.
     - cron: '27 * * * *'
+    - cron: '57 * * * *'
   workflow_dispatch:
   pull_request:
     paths:
@@ -74,9 +77,11 @@ jobs:
           python public_pons_shadow/collector.py --validate-only
           python public_pons_shadow/hot_collector.py --validate-only
           python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot -v
-      - name: Independently capture HOT then COLD, degrade visibly on provider failures
+      - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
+        env:
+          PUBLIC_PONS_SCHEDULE_SLOT: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
           source_sha=$(git rev-parse --verify HEAD)
@@ -85,9 +90,16 @@ jobs:
             rm -f /tmp/pons_hot.json
             echo "::warning::PUBLIC_PONS_HOT_DEGRADED_NO_CURSOR_ADVANCE"
           fi
-          if ! (timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/collector.py --repo-root . > /tmp/pons_cold.json); then
+          # Do not triple/duplicate historical RPC collection: only the original
+          # :27 schedule and manual/push executions run COLD. :57 is HOT-only.
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *" ]]; then
+            if ! (timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/collector.py --repo-root . > /tmp/pons_cold.json); then
+              rm -f /tmp/pons_cold.json
+              echo "::warning::PUBLIC_PONS_COLD_DEGRADED_NO_CURSOR_ADVANCE"
+            fi
+          else
             rm -f /tmp/pons_cold.json
-            echo "::warning::PUBLIC_PONS_COLD_DEGRADED_NO_CURSOR_ADVANCE"
+            echo "PUBLIC_PONS_COLD_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT"
           fi
           python - <<'PY'
           import json,os,pathlib,re,shutil
