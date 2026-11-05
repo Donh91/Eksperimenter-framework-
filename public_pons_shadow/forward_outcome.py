@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -52,14 +53,36 @@ def parse_utc(value):
     return dt
 
 
-def load_public_hot(root, now):
-    """Admit at most one already committed, self-hashed HOT batch."""
+def committed_source(root, path):
+    """Only allow exact bytes already included in checked-out public HEAD.
+
+    The same-run HOT collector writes files before the publish job. Those files
+    are staged but NOT yet public and must not seed an outcome freeze.
+    """
+    if not (root / ".git").exists():
+        return True  # Controlled offline fixture; production has Git checkout.
+    try:
+        rel=path.relative_to(root).as_posix()
+        source_sha=subprocess.check_output(["git","rev-parse","HEAD:"+rel],
+                                           cwd=root,text=True,stderr=subprocess.DEVNULL,timeout=3).strip()
+        actual_sha=subprocess.check_output(["git","hash-object","--",rel],
+                                           cwd=root,text=True,stderr=subprocess.DEVNULL,timeout=3).strip()
+        return source_sha==actual_sha and len(source_sha)==40
+    except (OSError,ValueError,subprocess.CalledProcessError,subprocess.TimeoutExpired):
+        return False
+
+
+def load_public_hot(root, now, current_run_id):
+    """Admit at most one previously committed, self-hashed HOT batch."""
     paths = sorted((root / "public_pons_shadow/hot/runs").glob("**/*_receipt.json"), reverse=True)
     for rp in paths[:30]:
-        if rp.is_symlink() or rp.stat().st_size > 2_000_000:
+        if rp.is_symlink() or rp.stat().st_size > 2_000_000 or not committed_source(root,rp):
             continue
         try:
             r = json.loads(rp.read_text())
+            # The current collect job's HOT is not yet published on main.
+            if r.get("github_run_id")==current_run_id:
+                continue
             if (r.get("sha256") != cold.hash_obj({k: v for k, v in r.items() if k != "sha256"})
                 or r.get("authority") != "PUBLIC_HOT_SHADOW_ONLY"
                 or r.get("contract") != "PUBLIC_PONS_V2_HOT_SHADOW_V1"
@@ -73,7 +96,7 @@ def load_public_hot(root, now):
             if not timedelta(0) <= now - seen <= MAX_SOURCE_AGE:
                 continue
             ep = rp.with_name(rp.name.replace("_receipt.json", "_events.json"))
-            if ep.is_symlink() or ep.stat().st_size > 2_000_000:
+            if ep.is_symlink() or ep.stat().st_size > 2_000_000 or not committed_source(root,ep):
                 continue
             events = json.loads(ep.read_text())
             if not isinstance(events, list) or len(events) != r.get("event_count"):
@@ -164,7 +187,7 @@ def run(root, run_id, checkout_sha, *, clock=now_utc, reader=read_spot):
     today = stamp(start)[:10]
     daily = sum(c["t0_utc"].startswith(today) for c in candidates)
     # This source may be missing: that is UNKNOWN, not evidence of zero launches.
-    source = load_public_hot(root, start) if daily < MAX_NEW_DAILY else None
+    source = load_public_hot(root, start, run_id) if daily < MAX_NEW_DAILY else None
     if source and len(candidates) < MAX_TRACKED:
         path, sha, observed, raw = source
         for block, index, token, pool, tx in raw:
