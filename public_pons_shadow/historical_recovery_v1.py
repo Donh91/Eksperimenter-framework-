@@ -21,7 +21,7 @@ except ImportError:
     import collector as cold
 
 START_BLOCK=95_013_239
-MAX_BLOCKS_PER_RUN=30_000
+MAX_BLOCKS_PER_RUN=180_000  # 6x speed; <= existing cold.MAX_SCAN, 90s timeout still applies
 MAX_CHUNK=2_000
 STATE=Path("public_pons_shadow/historical_state.json")
 RUNS=Path("public_pons_shadow/historical/runs")
