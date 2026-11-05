@@ -14,6 +14,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
+try:
+    from public_pons_shadow import forward_gate
+except ImportError:
+    import forward_gate
+
 CHAIN_ID=4663
 FACTORY="0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e"
 TOPIC0="0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607"
@@ -52,7 +57,7 @@ def validate(stage,root,run_id,checkout_sha):
         raise ValueError("PONS_CHECKOUT_INVALID")
     # Never accept symlink/extra files, including unexpected metadata and paths.
     files=[p for p in stage.rglob("*") if p.is_file() or p.is_symlink()]
-    if not 3<=len(files)<=6:
+    if not 3<=len(files)<=9:
         raise ValueError("PONS_STAGE_FILE_COUNT_INVALID")
     for file in files:
         if file.is_symlink() or not file.resolve().is_relative_to(stage.resolve()):
@@ -137,6 +142,11 @@ def validate(stage,root,run_id,checkout_sha):
                 raise ValueError("PONS_COLD_CONTINUITY_INVALID")
         expected.update((state_file,rp,ep))
         updates.extend((state_rel,rp.relative_to(stage),ep.relative_to(stage)))
+    # A separate public-only forward outcome lane has its own immutable
+    # source/clock/append-only validation. It cannot modify HOT/COLD cursors.
+    forward_updates=forward_gate.validate(stage,root,run_id,checkout_sha)
+    expected.update(stage/rel for rel in forward_updates)
+    updates.extend(forward_updates)
     if set(files)!=expected:
         raise ValueError("PONS_EXTRA_OR_MISSING_ARTIFACT")
     if not updates:
@@ -144,7 +154,9 @@ def validate(stage,root,run_id,checkout_sha):
     # Read-only source run origin verified against the checked-out main tree.
     subprocess.run(["git","merge-base","--is-ancestor",checkout_sha,"HEAD"],check=True)
     for source in (".github/workflows/public-pons-shadow.yml","public_pons_shadow/collector.py",
-                   "public_pons_shadow/hot_collector.py"):
+                   "public_pons_shadow/hot_collector.py",
+                   "public_pons_shadow/forward_outcome.py",
+                   "public_pons_shadow/forward_gate.py"):
         source_blob=subprocess.check_output(["git","rev-parse",checkout_sha+":"+source],text=True).strip()
         target_blob=subprocess.check_output(["git","rev-parse","HEAD:"+source],text=True).strip()
         if source_blob!=target_blob:
