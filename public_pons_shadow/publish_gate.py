@@ -15,9 +15,10 @@ import subprocess
 from pathlib import Path
 
 try:
-    from public_pons_shadow import forward_gate
+    from public_pons_shadow import forward_gate, curve_forward_gate_v1 as curve_gate
 except ImportError:
     import forward_gate
+    import curve_forward_gate_v1 as curve_gate
 
 CHAIN_ID=4663
 FACTORY="0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e"
@@ -57,7 +58,7 @@ def validate(stage,root,run_id,checkout_sha):
         raise ValueError("PONS_CHECKOUT_INVALID")
     # Never accept symlink/extra files, including unexpected metadata and paths.
     files=[p for p in stage.rglob("*") if p.is_file() or p.is_symlink()]
-    if not 3<=len(files)<=9:
+    if not 3<=len(files)<=12:
         raise ValueError("PONS_STAGE_FILE_COUNT_INVALID")
     for file in files:
         if file.is_symlink() or not file.resolve().is_relative_to(stage.resolve()):
@@ -147,6 +148,11 @@ def validate(stage,root,run_id,checkout_sha):
     forward_updates=forward_gate.validate(stage,root,run_id,checkout_sha)
     expected.update(stage/rel for rel in forward_updates)
     updates.extend(forward_updates)
+    # Independent onchain native-curve horizon ledger. Never promotes a spot
+    # ratio to a trade or mutates original source/forward T0.
+    curve_updates=curve_gate.validate(stage,root,run_id,checkout_sha)
+    expected.update(stage/rel for rel in curve_updates)
+    updates.extend(curve_updates)
     if set(files)!=expected:
         raise ValueError("PONS_EXTRA_OR_MISSING_ARTIFACT")
     if not updates:
@@ -156,7 +162,10 @@ def validate(stage,root,run_id,checkout_sha):
     for source in (".github/workflows/public-pons-shadow.yml","public_pons_shadow/collector.py",
                    "public_pons_shadow/hot_collector.py",
                    "public_pons_shadow/forward_outcome.py",
-                   "public_pons_shadow/forward_gate.py"):
+                   "public_pons_shadow/forward_gate.py",
+                   "public_pons_shadow/curve_forward_v1.py",
+                   "public_pons_shadow/curve_forward_gate_v1.py",
+                   "public_pons_shadow/native_curve_diagnostic_v1.py"):
         source_blob=subprocess.check_output(["git","rev-parse",checkout_sha+":"+source],text=True).strip()
         target_blob=subprocess.check_output(["git","rev-parse","HEAD:"+source],text=True).strip()
         if source_blob!=target_blob:
