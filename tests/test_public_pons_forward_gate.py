@@ -93,6 +93,26 @@ class TestForwardStage(unittest.TestCase):
         with self.assertRaises(ValueError):
             gate.validate(self.stage,self.publish,"101",SHA)
 
+    def test_self_hashed_private_key_injection_in_candidate_is_rejected(self):
+        self.stage_run(NOW,"101")
+        state=self.stage/fw.STATE
+        obj=json.loads(state.read_text())
+        obj["candidates"][0]["user_wallet"]="0x"+"1"*40
+        obj["sha256"]=cold.hash_obj({k:v for k,v in obj.items() if k!="sha256"})
+        state.write_bytes(cold.encode(obj))
+        with self.assertRaisesRegex(ValueError,"FORWARD_CANDIDATE_ID_INVALID"):
+            gate.validate(self.stage,self.publish,"101",SHA)
+
+    def test_self_hashed_private_metadata_in_observation_is_rejected(self):
+        self.stage_run(NOW,"101")
+        state=self.stage/fw.STATE
+        obj=json.loads(state.read_text())
+        obj["candidates"][0]["observations"]["BASELINE"]["position_size"]=123456
+        obj["sha256"]=cold.hash_obj({k:v for k,v in obj.items() if k!="sha256"})
+        state.write_bytes(cold.encode(obj))
+        with self.assertRaisesRegex(ValueError,"FORWARD_OUTCOME_AUTHORITY_OR_CLOCK_INVALID"):
+            gate.validate(self.stage,self.publish,"101",SHA)
+
     def test_unrelated_stage_files_not_admitted_by_public_gate(self):
         self.stage_run(NOW,"101")
         self.stage.joinpath("untrusted_user_positions.csv").write_text("wallet,private\n")
