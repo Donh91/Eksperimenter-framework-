@@ -141,6 +141,13 @@ def audited(root,clock=None):
                      "to_block":g["to_block"],
                      "cold_historical_range_covered":recovered,
                      "recovered_first_known":False})
+    # Lazy import avoids circular dependency: historical uses our strict
+    # existing duplicate-key / symlink-safe immutable JSON reader.
+    try:
+        from public_pons_shadow import historical_custody_v1
+    except ImportError:
+        import historical_custody_v1
+    historical_info=historical_custody_v1.audit(root,coldstate)
     result={
         "contract":CONTRACT,"authority":"PUBLIC_READ_ONLY_RESEARCH",
         "observed_at_utc":cold.iso(clock()),
@@ -162,6 +169,7 @@ def audited(root,clock=None):
         "economic_edge_verified":False,
         "portfolio_action":False,
         "alert_authority":False,
+        **historical_info,
     }
     return cold.signed(result)
 
