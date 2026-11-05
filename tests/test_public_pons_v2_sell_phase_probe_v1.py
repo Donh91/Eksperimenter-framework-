@@ -78,7 +78,7 @@ class TestV2SellFrictionProbe(unittest.TestCase):
         self.assertEqual(out["sha256"],cold.hash_obj({k:v for k,v in out.items() if k!="sha256"}))
         self.assertEqual({x["token"] for x in out["results"]},{A,B})
         for item in out["results"]:
-            self.assertEqual(item["status"],"RESEARCH_PHASE_AND_FEES_OBSERVED_NO_EXECUTION")
+            self.assertEqual(item["status"],"RESEARCH_PHASE_AND_FEES_OBSERVED_NO_EXECUTION",msg=item)
             self.assertEqual(item["phase"],0)
             self.assertFalse(item["ready_to_graduate"])
             self.assertEqual(item["fee_bps"],100)
@@ -97,7 +97,7 @@ class TestV2SellFrictionProbe(unittest.TestCase):
         out=self.read(FeePhaseClient(sellable=0,ready=True))
         self.assertEqual(len(out["results"]),2)
         for row in out["results"]:
-            self.assertEqual(row["status"],"RESEARCH_PHASE_AND_FEES_OBSERVED_NO_EXECUTION")
+            self.assertEqual(row["status"],"RESEARCH_PHASE_AND_FEES_OBSERVED_NO_EXECUTION",msg=row)
             self.assertTrue(row["ready_to_graduate"])
             self.assertTrue(all(q["calculation_status"]=="CURVE_SELL_CLOSED_READY_TO_GRADUATE"
                                 for q in row["token_sizes"]))
