@@ -190,6 +190,8 @@ def read_sell_shadow(root,client,clock=None):
         except (ValueError,KeyError,TypeError,OSError,RuntimeError) as exc:
             row["status"]="UNKNOWN_ONCHAIN_PHASE_OR_FEE_SOURCE"
             row["reason_class"]=type(exc).__name__
+            if isinstance(exc,ValueError) and str(exc).startswith("SELL_"):
+                row["reason_code"]=str(exc)  # bounded internal reason, no RPC text.
             row["token_sizes"]=[]
         row["read_at_utc"]=cold.iso(clock())
         result["results"].append(row)
