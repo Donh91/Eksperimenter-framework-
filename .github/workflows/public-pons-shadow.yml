@@ -30,6 +30,7 @@ on:
       - 'public_pons_shadow/forward_outcome.py'
       - 'public_pons_shadow/forward_gate.py'
       - 'tests/test_public_pons_forward_outcome.py'
+      - 'tests/test_public_pons_forward_gate.py'
 
 permissions:
   contents: read
@@ -56,7 +57,7 @@ jobs:
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
           python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_workflow_security_v1 -v
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_workflow_security_v1 -v
 
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
@@ -82,7 +83,7 @@ jobs:
           python public_pons_shadow/collector.py --validate-only
           python public_pons_shadow/hot_collector.py --validate-only
           python public_pons_shadow/forward_outcome.py --validate-only
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome -v
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate -v
       - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
