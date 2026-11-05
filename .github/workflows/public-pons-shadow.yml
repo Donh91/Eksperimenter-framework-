@@ -17,6 +17,7 @@ on:
       - 'public_pons_shadow/curve_forward_v1.py'
       - 'public_pons_shadow/curve_forward_gate_v1.py'
       - 'public_pons_shadow/coverage_custody_v1.py'
+      - 'public_pons_shadow/historical_custody_v1.py'
       - 'public_pons_shadow/v2_quote_math_research_v1.py'
       - 'public_pons_shadow/historical_recovery_v1.py'
       - 'public_pons_shadow/v2_sell_phase_probe_v1.py'
@@ -44,6 +45,7 @@ on:
       - 'public_pons_shadow/curve_forward_gate_v1.py'
       - 'tests/test_public_pons_curve_forward_v1.py'
       - 'public_pons_shadow/coverage_custody_v1.py'
+      - 'public_pons_shadow/historical_custody_v1.py'
       - 'tests/test_public_pons_coverage_custody_v1.py'
       - 'public_pons_shadow/v2_quote_math_research_v1.py'
       - 'tests/test_public_pons_v2_quote_math_research_v1.py'
@@ -76,7 +78,7 @@ jobs:
           python-version: '3.12'
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/v2_quote_math_research_v1.py public_pons_shadow/historical_recovery_v1.py public_pons_shadow/v2_sell_phase_probe_v1.py
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/historical_custody_v1.py public_pons_shadow/v2_quote_math_research_v1.py public_pons_shadow/historical_recovery_v1.py public_pons_shadow/v2_sell_phase_probe_v1.py
           python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_v2_sell_phase_probe_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
 
   collect:
