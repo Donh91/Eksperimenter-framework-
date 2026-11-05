@@ -162,6 +162,21 @@ class TestPublicForward(unittest.TestCase):
         self.assertEqual(self.execute(NOW+timedelta(hours=24,minutes=20),"102")["event_count"],2)
         self.assertEqual(len(self.state()["candidates"]),2)
 
+    def test_provider_response_completed_after_deadline_cannot_get_spot_credit(self):
+        fake_source(self.root)
+        moving={"value": NOW}
+        def clock():
+            return moving["value"]
+        def delayed_spot(token,pair):
+            moving["value"]=NOW+timedelta(hours=5)
+            return {"state":"PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE",
+                    "price_usd":"999","pair":POOL}
+        fw.run(self.root,"101",SHA,clock=clock,reader=delayed_spot)
+        for c in self.state()["candidates"]:
+            self.assertEqual(c["observations"]["BASELINE"]["state"],"WINDOW_MISSED")
+            self.assertIsNone(c["observations"]["BASELINE"]["price_usd"])
+            self.assertIsNone(c["observations"]["BASELINE"]["realizable_net_return"])
+
     def test_no_user_wallet_fields_ever_in_public_state(self):
         fake_source(self.root)
         self.execute(NOW,"101")
