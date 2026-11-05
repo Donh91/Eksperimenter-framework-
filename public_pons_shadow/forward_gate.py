@@ -18,6 +18,19 @@ RUNPATH = re.compile(r"public_pons_shadow/forward/runs/\d{4}/\d{2}/\d{2}/"
                      r"\d{8}T\d{6}Z_\d{1,20}_receipt\.json\Z")
 SOURCEPATH = re.compile(r"public_pons_shadow/hot/runs/\d{4}/\d{2}/\d{2}/"
                         r"\d{8}T\d{6}Z_\d{1,20}_receipt\.json\Z")
+STATE_KEYS={"contract","authority","run_id","last_receipt_sha256",
+            "candidates","alert_authority","portfolio_action","sha256"}
+CANDIDATE_KEYS={"id","chain_id","token","source_pool","source_receipt",
+                "source_receipt_sha256","source_machine_observed_utc","t0_utc",
+                "selection","source_coverage","first_known_verified",
+                "paper_entry_authority","observations"}
+OBS_KEYS={"horizon","target_utc","captured_at_utc","state","price_usd","pair",
+          "provider_timestamp_verified","execution_verified","realizable_net_return"}
+RECEIPT_KEYS={"contract","authority","run_id","checkout_sha","started_at_utc",
+              "finished_at_utc","source_calls","event_count","events_sha256",
+              "previous_state_sha256","canonical_source_admitted",
+              "historical_replay","first_known_verified","portfolio_action",
+              "paper_execution","alert_authority","sha256"}
 STATUS = {"PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE","UNKNOWN_PROVIDER_ERROR",
           "UNKNOWN_EXACT_PUBLIC_PAIR","UNKNOWN_NO_BASELINE_PAIR","WINDOW_MISSED"}
 
@@ -84,7 +97,8 @@ def validate(stage,root,run_id,checkout_sha):
         return []
     state=read(staged)
     prior=read(root/state_rel) if (root/state_rel).exists() else None
-    if (state.get("contract")!=fw.CONTRACT
+    if (set(state)!=STATE_KEYS
+        or state.get("contract")!=fw.CONTRACT
         or state.get("authority")!="PUBLIC_RESEARCH_ONLY"
         or state.get("run_id")!=run_id
         or state.get("alert_authority") is not False
@@ -93,7 +107,7 @@ def validate(stage,root,run_id,checkout_sha):
         or not isinstance(state.get("candidates"),list)
         or len(state["candidates"])>fw.MAX_TRACKED):
         raise ValueError("FORWARD_STAGE_STATE_UNTRUSTED")
-    if prior and (prior.get("sha256")!=cold.hash_obj({k:v for k,v in prior.items() if k!="sha256"})
+    if prior and (set(prior)!=STATE_KEYS or prior.get("sha256")!=cold.hash_obj({k:v for k,v in prior.items() if k!="sha256"})
         or prior.get("contract")!=fw.CONTRACT):
         raise ValueError("FORWARD_PREVIOUS_STATE_UNTRUSTED")
     receipts=list((stage/fw.HISTORY).glob("**/*_receipt.json"))
@@ -106,7 +120,8 @@ def validate(stage,root,run_id,checkout_sha):
     ep=rp.with_name(rp.name.replace("_receipt.json","_events.json"))
     receipt=read(rp)
     events=read(ep)
-    if (not isinstance(events,list) or not events
+    if (set(receipt)!=RECEIPT_KEYS
+        or not isinstance(events,list) or not events
         or receipt.get("sha256")!=cold.hash_obj({k:v for k,v in receipt.items() if k!="sha256"})
         or receipt.get("contract")!=fw.CONTRACT
         or receipt.get("authority")!="PUBLIC_RESEARCH_ONLY"
@@ -133,7 +148,7 @@ def validate(stage,root,run_id,checkout_sha):
     tokens=set()
     today_new={}
     for i,c in enumerate(state["candidates"]):
-        if not isinstance(c,dict) or not HEX.fullmatch(str(c.get("id") or "")):
+        if not isinstance(c,dict) or set(c)!=CANDIDATE_KEYS or not HEX.fullmatch(str(c.get("id") or "")):
             raise ValueError("FORWARD_CANDIDATE_ID_INVALID")
         if (c["id"] in ids or c.get("token") in tokens
             or c.get("chain_id")!=4663
@@ -177,7 +192,8 @@ def validate(stage,root,run_id,checkout_sha):
             hrs={"BASELINE":0,"24H":24,"72H":72}[label]
             due=t0+timedelta(hours=hrs)
             seen=fw.parse_utc(o.get("captured_at_utc"))
-            if (o.get("horizon")!=label or o.get("target_utc")!=fw.stamp(due)
+            if (not isinstance(o,dict) or set(o)!=OBS_KEYS
+                or o.get("horizon")!=label or o.get("target_utc")!=fw.stamp(due)
                 or not due<=seen<=end
                 or o.get("state") not in STATUS
                 or o.get("provider_timestamp_verified") is not False
