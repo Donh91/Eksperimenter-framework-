@@ -181,28 +181,43 @@ def validate(stage,root,run_id,checkout_sha):
                 raise ValueError("FORWARD_FREEZE_REWRITTEN")
             oldobs=original.get("observations",{})
         observations=c.get("observations")
-        if not isinstance(observations,dict) or not set(observations)<= {"BASELINE","24H","72H"}:
+        if not isinstance(observations,dict):
+            raise ValueError("FORWARD_OBSERVATIONS_INVALID")
+        attempt_names=["BASELINE_ATTEMPT_"+str(j) for j in range(1,fw.MAX_BASELINE_ATTEMPTS+1)]
+        attempts=[a for a in attempt_names if a in observations]
+        if (not set(observations)<= {"BASELINE","24H","72H",*attempt_names}
+            or attempts != attempt_names[:len(attempts)]
+            or ("BASELINE" in oldobs and any(a not in oldobs for a in attempts))):
             raise ValueError("FORWARD_OBSERVATIONS_INVALID")
         if any(observations.get(k)!=v for k,v in oldobs.items()):
             raise ValueError("FORWARD_OUTCOME_REWRITTEN")
-        for label in ("BASELINE","24H","72H"):
+        if "BASELINE" in observations and attempts:
+            baseline_at=fw.parse_utc(observations["BASELINE"]["captured_at_utc"])
+            if any(fw.parse_utc(observations[a]["captured_at_utc"]) > baseline_at for a in attempts):
+                raise ValueError("FORWARD_ATTEMPT_AFTER_BASELINE")
+        for label in (*attempt_names,"BASELINE","24H","72H"):
             if label not in observations or label in oldobs:
                 continue
-            o=observations[label]
-            hrs={"BASELINE":0,"24H":24,"72H":72}[label]
+            item=observations[label]
+            is_attempt=label.startswith("BASELINE_ATTEMPT_")
+            hrs={"BASELINE":0,"24H":24,"72H":72}.get(label,0)
             due=t0+timedelta(hours=hrs)
-            seen=fw.parse_utc(o.get("captured_at_utc"))
-            if (not isinstance(o,dict) or set(o)!=OBS_KEYS
-                or o.get("horizon")!=label or o.get("target_utc")!=fw.stamp(due)
-                or not due<=seen<=end
-                or o.get("state") not in STATUS
-                or o.get("provider_timestamp_verified") is not False
-                or o.get("execution_verified") is not False
-                or o.get("realizable_net_return") is not None):
+            if not isinstance(item,dict) or set(item)!=OBS_KEYS:
                 raise ValueError("FORWARD_OUTCOME_AUTHORITY_OR_CLOCK_INVALID")
-            px=o.get("price_usd");pair=o.get("pair")
-            if o["state"]=="PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE":
-                if not isinstance(px,str) or not fw.TOKEN.fullmatch(str(pair or "")):
+            seen=fw.parse_utc(item.get("captured_at_utc"))
+            if (item.get("horizon")!=("BASELINE_ATTEMPT" if is_attempt else label)
+                or item.get("target_utc")!=fw.stamp(due)
+                or not due<=seen<=end
+                or (is_attempt and (seen>due+fw.MAX_LATE
+                    or item.get("state") not in {"UNKNOWN_PROVIDER_ERROR","UNKNOWN_EXACT_PUBLIC_PAIR"}))
+                or item.get("state") not in STATUS
+                or item.get("provider_timestamp_verified") is not False
+                or item.get("execution_verified") is not False
+                or item.get("realizable_net_return") is not None):
+                raise ValueError("FORWARD_OUTCOME_AUTHORITY_OR_CLOCK_INVALID")
+            px=item.get("price_usd");pair=item.get("pair")
+            if item["state"]=="PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE":
+                if is_attempt or not isinstance(px,str) or not fw.TOKEN.fullmatch(str(pair or "")):
                     raise ValueError("FORWARD_SPOT_PRICE_OR_PAIR_INVALID")
                 try:
                     n=float(px)
@@ -214,7 +229,7 @@ def validate(stage,root,run_id,checkout_sha):
                     raise ValueError("FORWARD_PAIR_CHANGED_AFTER_FREEZE")
             elif px is not None or pair is not None:
                 raise ValueError("FORWARD_UNKNOWN_WITH_FAKE_PRICE")
-            expected.append({"id":c["id"], **o})
+            expected.append({"id":c["id"], **item})
     if sorted(json.dumps(x,sort_keys=True) for x in expected)!=sorted(json.dumps(x,sort_keys=True) for x in events):
         raise ValueError("FORWARD_STAGE_EVENT_LEDGER_MISMATCH")
     return [state_rel,rp.relative_to(stage),ep.relative_to(stage)]

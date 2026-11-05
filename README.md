@@ -98,8 +98,13 @@ factory-log collection. It has no separate schedule or private Actions runner.
 - **Outcome:** fixed initial public DexScreener token-pair observation and
   due-only +24h and +72h snapshots, maximum four short-timeout requests per
   run. Pair selection occurs only at baseline and cannot chase whichever later
-  pool rises. Captures more than four hours late become `WINDOW_MISSED`, and
-  source errors or missing baseline become explicitly `UNKNOWN`.
+  pool rises. A not-yet-indexed baseline generates immutable `BASELINE_ATTEMPT_N`
+  receipts, at most eight attempts during the original four-hour T0 window;
+  it does not instantly become a terminal loss or success. A later recovered
+  baseline retains its **actual** observation timestamp, never pretends to be
+  a price known at the original T0. Past frozen baseline rows remain unchanged.
+  Captures more than four hours late become `WINDOW_MISSED`, and
+  source errors or missing baseline remain explicitly `UNKNOWN`.
 - **Integrity:** hashed, append-only frozen T0 and outcomes; a dedicated stage
   validator independently binds the original HOT receipt and validates all
   receipt hashes, immutable T0 and candidate identity, expected event deltas,

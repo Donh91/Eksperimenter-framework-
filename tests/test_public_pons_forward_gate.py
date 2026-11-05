@@ -29,11 +29,11 @@ class TestForwardStage(unittest.TestCase):
             dest.parent.mkdir(parents=True,exist_ok=True)
             shutil.copyfile(self.source/rel,dest)
 
-    def stage_run(self,when,runid):
+    def stage_run(self,when,runid,reader=None):
         def read(token,pair):
             return {"state":"PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE",
                     "price_usd":"0.00091","pair":pair or POOL}
-        out=fw.run(self.source,runid,SHA,clock=lambda:when,reader=read)
+        out=fw.run(self.source,runid,SHA,clock=lambda:when,reader=reader or read)
         self.assertEqual(out["status"],"PUBLIC_FORWARD_CAPTURED_UNPUBLISHED")
         self.stage.mkdir(parents=True,exist_ok=True)
         for rel in [fw.STATE,Path(out["receipt"]),
@@ -61,6 +61,36 @@ class TestForwardStage(unittest.TestCase):
         update2=gate.validate(self.stage,self.publish,"102",SHA)
         self.assertEqual(len(update2),3)
         self.assertEqual(json.loads((self.stage/fw.STATE).read_text())["candidates"][0]["t0_utc"],cold.iso(NOW))
+
+    def test_unknown_attempt_then_new_spot_baseline_accepted_only_forward(self):
+        def missing(token,pair):
+            return {"state":"UNKNOWN_EXACT_PUBLIC_PAIR","price_usd":None,"pair":None}
+        first=self.stage_run(NOW,"101",reader=missing)
+        self.assertEqual(len(gate.validate(self.stage,self.publish,"101",SHA)),3)
+        self.assertTrue(all("BASELINE_ATTEMPT_1" in c["observations"]
+                            and "BASELINE" not in c["observations"]
+                            for c in json.loads((self.stage/fw.STATE).read_text())["candidates"]))
+        self.publish_state(first)
+        shutil.rmtree(self.stage)
+        second=self.stage_run(NOW+timedelta(minutes=29),"102")
+        self.assertEqual(len(gate.validate(self.stage,self.publish,"102",SHA)),3)
+        for c in json.loads((self.stage/fw.STATE).read_text())["candidates"]:
+            obs=c["observations"]
+            self.assertEqual(obs["BASELINE_ATTEMPT_1"]["state"],"UNKNOWN_EXACT_PUBLIC_PAIR")
+            self.assertEqual(obs["BASELINE"]["captured_at_utc"],cold.iso(NOW+timedelta(minutes=29)))
+            self.assertFalse(obs["BASELINE"]["execution_verified"])
+
+    def test_self_hashed_attempt_with_faked_price_rejected(self):
+        def missing(token,pair):
+            return {"state":"UNKNOWN_EXACT_PUBLIC_PAIR","price_usd":None,"pair":None}
+        self.stage_run(NOW,"101",reader=missing)
+        state=self.stage/fw.STATE
+        obj=json.loads(state.read_text())
+        obj["candidates"][0]["observations"]["BASELINE_ATTEMPT_1"]["price_usd"]="9999"
+        obj["sha256"]=cold.hash_obj({k:v for k,v in obj.items() if k!="sha256"})
+        state.write_bytes(cold.encode(obj))
+        with self.assertRaises(ValueError):
+            gate.validate(self.stage,self.publish,"101",SHA)
 
     def test_private_or_unpublished_source_is_not_admitted(self):
         self.stage_run(NOW,"101")
