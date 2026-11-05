@@ -12,6 +12,18 @@ from public_pons_shadow import historical_recovery_v1 as hist
 from tests.test_public_pons_shadow import RPC, NOW, SHA
 
 
+class HistoricalLaunchRPC(RPC):
+    # Real Pons TokenLaunched evidence has 4 topics, while the legacy
+    # bare COLD tests intentionally use one-topic generic fixtures.
+    def __call__(self,url,method,args):
+        result=super().__call__(url,method,args)
+        if method=="eth_getLogs":
+            for row in result:
+                row["topics"]=[cold.TOPIC0,"0x"+"1"*64,
+                               "0x"+"2"*64,"0x"+"3"*64]
+        return result
+
+
 class TestCoverageCustody(unittest.TestCase):
     def setUp(self):
         t=tempfile.TemporaryDirectory()
@@ -108,7 +120,7 @@ class TestCoverageCustody(unittest.TestCase):
         # Ordinary COLD bootstrap is 89; historical source only covers its
         # missing predecessor 20..88, never mutating ordinary COLD cursor.
         with patch.object(hist,"START_BLOCK",20):
-            return hist.capture(self.root,cold.Client(RPC(head=106)),
+            return hist.capture(self.root,cold.Client(HistoricalLaunchRPC(head=106)),
                                 run,SHA,clock=lambda:NOW)
 
     def test_actual_historical_chain_audit_preserves_separate_source_authority(self):
@@ -129,7 +141,7 @@ class TestCoverageCustody(unittest.TestCase):
 
     def test_historical_partial_gap_is_measured_not_declared_complete(self):
         with patch.object(hist,"START_BLOCK",20), patch.object(hist,"MAX_BLOCKS_PER_RUN",20):
-            hist.capture(self.root,cold.Client(RPC(head=106)),"103",SHA,clock=lambda:NOW)
+            hist.capture(self.root,cold.Client(HistoricalLaunchRPC(head=106)),"103",SHA,clock=lambda:NOW)
             report=audit.audited(self.root,clock=lambda:NOW)
         self.assertEqual(report["historical_verified_end_block"],39)
         self.assertEqual(report["historical_remaining_to_cold_bootstrap"],49)
