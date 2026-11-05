@@ -88,8 +88,7 @@ def reserve_observation(client,token,curve,block,block_hash,target,clock,horizon
         status="UNKNOWN_NATIVE_CURVE_RPC"
     observed=clock()
     if horizon!="NATIVE_BASELINE" and observed > target + MAX_LATE:
-        status="WINDOW_MISSED"
-        ratio=qr=tr=dec=None
+        return missed_snapshot(horizon,target,observed)
     if not isinstance(observed,datetime) or observed.tzinfo is None:
         raise ValueError("CURVE_CLOCK_NOT_UTC")
     return {
