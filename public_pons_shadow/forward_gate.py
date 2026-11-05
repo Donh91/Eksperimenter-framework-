@@ -14,10 +14,10 @@ except ImportError:
     import forward_outcome as fw
 
 HEX = re.compile(r"[a-f0-9]{24}\Z")
-RUNPATH = re.compile(r"public_pons_shadow/forward/runs/\\d{4}/\\d{2}/\\d{2}/"
-                     r"\\d{8}T\\d{6}Z_\\d{1,20}_receipt\\.json\Z")
-SOURCEPATH = re.compile(r"public_pons_shadow/hot/runs/\\d{4}/\\d{2}/\\d{2}/"
-                        r"\\d{8}T\\d{6}Z_\\d{1,20}_receipt\\.json\Z")
+RUNPATH = re.compile(r"public_pons_shadow/forward/runs/\d{4}/\d{2}/\d{2}/"
+                     r"\d{8}T\d{6}Z_\d{1,20}_receipt\.json\Z")
+SOURCEPATH = re.compile(r"public_pons_shadow/hot/runs/\d{4}/\d{2}/\d{2}/"
+                        r"\d{8}T\d{6}Z_\d{1,20}_receipt\.json\Z")
 STATUS = {"PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE","UNKNOWN_PROVIDER_ERROR",
           "UNKNOWN_EXACT_PUBLIC_PAIR","UNKNOWN_NO_BASELINE_PAIR","WINDOW_MISSED"}
 
