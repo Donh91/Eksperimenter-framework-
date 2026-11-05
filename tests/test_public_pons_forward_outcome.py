@@ -118,12 +118,50 @@ class TestPublicForward(unittest.TestCase):
             raise RuntimeError("HTTP_429")
         out=fw.run(self.root,"101",SHA,clock=lambda:NOW,reader=fail)
         self.assertEqual(out["source_calls"],2)
-        self.assertTrue(all(c["observations"]["BASELINE"]["state"]=="UNKNOWN_PROVIDER_ERROR"
+        self.assertTrue(all(c["observations"]["BASELINE_ATTEMPT_1"]["state"]=="UNKNOWN_PROVIDER_ERROR"
+                            and "BASELINE" not in c["observations"]
                             for c in self.state()["candidates"]))
-        out=self.execute(NOW+timedelta(hours=24),"102")
-        self.assertEqual(out["source_calls"],0)
+        # A later first valid price cannot be backdated to the original T0.
+        out=self.execute(NOW+timedelta(minutes=31),"102")
+        self.assertEqual(out["source_calls"],2)
+        self.assertTrue(all(c["observations"]["BASELINE"]["state"]=="PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE"
+                            and c["observations"]["BASELINE"]["captured_at_utc"]==cold.iso(NOW+timedelta(minutes=31))
+                            and c["observations"]["BASELINE_ATTEMPT_1"]["price_usd"] is None
+                            for c in self.state()["candidates"]))
+
+    def test_terminal_baseline_only_after_four_hour_deadline(self):
+        fake_source(self.root)
+        def missing(token,pair):
+            return {"state":"UNKNOWN_EXACT_PUBLIC_PAIR","price_usd":None,"pair":None}
+        initial=fw.run(self.root,"101",SHA,clock=lambda:NOW,reader=missing)
+        self.assertEqual(initial["event_count"],4)
+        out=fw.run(self.root,"102",SHA,clock=lambda:NOW+timedelta(minutes=30),reader=missing)
+        self.assertEqual(out["event_count"],2)
+        for c in self.state()["candidates"]:
+            self.assertNotIn("BASELINE",c["observations"])
+            self.assertEqual(c["observations"]["BASELINE_ATTEMPT_1"]["state"],"UNKNOWN_EXACT_PUBLIC_PAIR")
+            self.assertEqual(c["observations"]["BASELINE_ATTEMPT_2"]["state"],"UNKNOWN_EXACT_PUBLIC_PAIR")
+        due=fw.run(self.root,"103",SHA,clock=lambda:NOW+timedelta(hours=4,minutes=1),reader=missing)
+        self.assertEqual(due["source_calls"],0)
+        self.assertTrue(all(c["observations"]["BASELINE"]["state"]=="WINDOW_MISSED"
+                            for c in self.state()["candidates"]))
+        future=fw.run(self.root,"104",SHA,clock=lambda:NOW+timedelta(hours=24),reader=missing)
+        self.assertEqual(future["source_calls"],0)
         self.assertTrue(all(c["observations"]["24H"]["state"]=="UNKNOWN_NO_BASELINE_PAIR"
                             for c in self.state()["candidates"]))
+
+    def test_baseline_attempts_bounded_and_never_overwrite_prior(self):
+        fake_source(self.root)
+        def missing(token,pair):
+            return {"state":"UNKNOWN_EXACT_PUBLIC_PAIR","price_usd":None,"pair":None}
+        for i in range(8):
+            out=fw.run(self.root,str(101+i),SHA,clock=lambda i=i:NOW+timedelta(minutes=i*20),reader=missing)
+            self.assertEqual(out["source_calls"],2)
+        self.assertEqual(fw.run(self.root,"200",SHA,clock=lambda:NOW+timedelta(hours=3),reader=missing)["status"],
+                         "NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE")
+        for c in self.state()["candidates"]:
+            self.assertEqual(len(c["observations"]),8)
+            self.assertNotIn("BASELINE",c["observations"])
 
     def test_corrupted_state_fails_without_changing_bytes(self):
         fake_source(self.root)
