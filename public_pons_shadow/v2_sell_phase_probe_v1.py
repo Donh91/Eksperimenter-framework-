@@ -144,7 +144,9 @@ def read_sell_shadow(root,client,clock=None):
             if orig is None:raise ValueError("SELL_FORWARD_SOURCE_MISSING")
             token,curve_address,pair=native.source_case(root,orig)
             if (token!=f["token"] or curve_address!=f["curve"]
-                or pair!=native.ZERO or f["source_receipt_sha256"]!=orig["source_receipt_sha256"]):
+                or pair!=native.ZERO or f["source_receipt_sha256"]!=orig["source_receipt_sha256"]
+                or f["source_receipt"]!=orig["source_receipt"]
+                or f["original_forward_t0_utc"]!=orig["t0_utc"]):
                 raise ValueError("SELL_CROSS_SOURCE_IDENTITY_MISMATCH")
             # Strict 15-word static ABI factory struct, not ticker or pool inference.
             launch=decode_factory(call_view(
@@ -162,6 +164,9 @@ def read_sell_shadow(root,client,clock=None):
             if dec>30:raise ValueError("SELL_DECIMALS_INVALID")
             if tax!=launch["creator_tax_bps"]:
                 raise ValueError("SELL_FACTORY_CURVE_CREATOR_TAX_CONFLICT")
+            if (graduated != (launch["phase"]!=0)
+                or (launch["phase"]==0 and ready!=(sellable==0))):
+                raise ValueError("SELL_FACTORY_CURVE_PHASE_CONTRADICTION")
             state={"chain_id":4663,"quote_asset":"NATIVE_ETH",
                    "quote_reserve_wei":reserves[0],"token_reserve_raw":reserves[1],
                    "sellable_tokens_raw":sellable,"fee_bps":fee,
