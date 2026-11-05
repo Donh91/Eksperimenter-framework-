@@ -13,6 +13,7 @@ on:
       - 'public_pons_shadow/publish_gate.py'
       - 'public_pons_shadow/forward_outcome.py'
       - 'public_pons_shadow/forward_gate.py'
+      - 'public_pons_shadow/native_curve_diagnostic_v1.py'
   schedule:
     # Public-only HOT source observation twice per hour; COLD remains hourly.
     # GitHub schedule delivery is best effort and never guarantees full LIVE coverage.
@@ -31,6 +32,8 @@ on:
       - 'public_pons_shadow/forward_gate.py'
       - 'tests/test_public_pons_forward_outcome.py'
       - 'tests/test_public_pons_forward_gate.py'
+      - 'public_pons_shadow/native_curve_diagnostic_v1.py'
+      - 'tests/test_public_pons_native_curve_diagnostic_v1.py'
 
 permissions:
   contents: read
@@ -56,8 +59,8 @@ jobs:
           python-version: '3.12'
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_workflow_security_v1 -v
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_workflow_security_v1 -v
 
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
@@ -79,11 +82,11 @@ jobs:
           python-version: '3.12'
       - name: Validate public-source scripts, no writer credential
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py
           python public_pons_shadow/collector.py --validate-only
           python public_pons_shadow/hot_collector.py --validate-only
           python public_pons_shadow/forward_outcome.py --validate-only
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate -v
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 -v
       - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
@@ -149,6 +152,26 @@ jobs:
           if not any_valid:raise RuntimeError('BOTH_PUBLIC_PONS_LANES_FAILED')
           print('PUBLIC_PONS_CAPTURE_RESULT HOT_COLD_FORWARD_INDEPENDENT has_data='+str(any_data))
           PY
+      - name: Native Pons V2 reserve proxy, push-only research diagnostic
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 90s python -B public_pons_shadow/native_curve_diagnostic_v1.py --repo-root . > /tmp/public-pons-native-curve-diagnostic.json
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            rm -f /tmp/public-pons-native-curve-diagnostic.json
+            echo "::warning::PUBLIC_PONS_NATIVE_CURVE_DIAGNOSTIC_UNKNOWN exit_code=$rc"
+          fi
+          exit 0
+      - name: Upload bounded native curve research-only diagnostic
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-pons-native-curve-research-only
+          path: /tmp/public-pons-native-curve-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload strictly bounded public data files, not credentials
         if: steps.stage.outputs.has_data == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # verified upstream v4 ref 2026-11-02
