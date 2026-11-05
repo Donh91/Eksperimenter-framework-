@@ -1,6 +1,7 @@
 """Adversarial, offline public-only forward sampler tests. Never request providers."""
 import copy
 import json
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -17,7 +18,7 @@ HASH = "0x" + "d"*64
 SHA = "f"*40
 
 
-def fake_source(root, *, seen=NOW-timedelta(minutes=20), poisoned=False):
+def fake_source(root, *, seen=NOW-timedelta(minutes=20), poisoned=False, source_run_id='123'):
     day = seen.strftime("%Y/%m/%d")
     folder = root / "public_pons_shadow/hot/runs" / day
     folder.mkdir(parents=True, exist_ok=True)
@@ -33,7 +34,7 @@ def fake_source(root, *, seen=NOW-timedelta(minutes=20), poisoned=False):
         authority="PUBLIC_HOT_SHADOW_ONLY", chain_id=cold.CHAIN_ID,
         factory=cold.FACTORY, topic0=cold.TOPIC0, from_block=100, to_block=102,
         event_count=len(events), events_sha256=cold.hash_obj(events),
-        scan_finished_at_utc=cold.iso(seen), real_time_window_candidate=True,
+        scan_finished_at_utc=cold.iso(seen), github_run_id=source_run_id, real_time_window_candidate=True,
         private_source_admitted=False,canonical_census_complete=False,
         portfolio_action=False,alert_authority=False))
     if poisoned:
@@ -60,6 +61,23 @@ class TestPublicForward(unittest.TestCase):
 
     def state(self):
         return json.loads((self.root/fw.STATE).read_text())
+
+    def test_same_run_hot_is_unpublished_and_never_seeds_forward(self):
+        fake_source(self.root,source_run_id="101")
+        self.assertEqual(self.execute(NOW,"101")["status"],"NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE")
+        self.assertFalse((self.root/fw.STATE).exists())
+
+    def test_git_checkout_source_blob_must_already_be_committed(self):
+        subprocess.run(["git","init","-q"],cwd=self.root,check=True)
+        previous=fake_source(self.root,seen=NOW-timedelta(minutes=25))
+        subprocess.run(["git","add","--","public_pons_shadow/hot/runs"],cwd=self.root,check=True)
+        subprocess.run(["git","-c","user.name=fixture","-c","user.email=fixture@example.invalid",
+                        "commit","-qm","fixture published"],cwd=self.root,check=True)
+        newer=fake_source(self.root,seen=NOW-timedelta(minutes=10),source_run_id="222")
+        self.assertFalse(fw.committed_source(self.root,newer))
+        self.assertTrue(fw.committed_source(self.root,previous))
+        self.execute(NOW,"101")
+        self.assertEqual(self.state()["candidates"][0]["source_receipt"],previous.relative_to(self.root).as_posix())
 
     def test_new_public_t0_does_not_backdate_hot_receipt_or_grant_alpha(self):
         fake_source(self.root)
