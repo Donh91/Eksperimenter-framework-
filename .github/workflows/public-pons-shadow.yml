@@ -17,6 +17,7 @@ on:
       - 'public_pons_shadow/curve_forward_v1.py'
       - 'public_pons_shadow/curve_forward_gate_v1.py'
       - 'public_pons_shadow/coverage_custody_v1.py'
+      - 'public_pons_shadow/v2_quote_math_research_v1.py'
       - 'public_pons_shadow/historical_recovery_v1.py'
   schedule:
     # Public-only HOT source observation twice per hour; COLD remains hourly.
@@ -43,6 +44,8 @@ on:
       - 'tests/test_public_pons_curve_forward_v1.py'
       - 'public_pons_shadow/coverage_custody_v1.py'
       - 'tests/test_public_pons_coverage_custody_v1.py'
+      - 'public_pons_shadow/v2_quote_math_research_v1.py'
+      - 'tests/test_public_pons_v2_quote_math_research_v1.py'
       - 'public_pons_shadow/historical_recovery_v1.py'
       - 'tests/test_public_pons_historical_recovery_v1.py'
 
@@ -70,8 +73,8 @@ jobs:
           python-version: '3.12'
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/historical_recovery_v1.py
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/v2_quote_math_research_v1.py public_pons_shadow/historical_recovery_v1.py
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
 
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
@@ -99,7 +102,7 @@ jobs:
           python public_pons_shadow/forward_outcome.py --validate-only
           python public_pons_shadow/curve_forward_v1.py --validate-only
           python public_pons_shadow/historical_recovery_v1.py --validate-only
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_historical_recovery_v1 -v
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_historical_recovery_v1 -v
       - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
@@ -136,8 +139,8 @@ jobs:
             rm -f /tmp/pons_curve.json
             echo "::warning::PUBLIC_NATIVE_CURVE_DUE_DEGRADED_NO_STATE_ADVANCE"
           fi
-          # A separate public-only historical gap lane ending BEFORE the
-          # original public COLD bootstrap; never private canonical source.
+          # Research-only 30k-block historical interval, never canonical
+          # source or retroactive launch credit. Existing hourly COLD slot.
           if [[ "$GITHUB_EVENT_NAME" != "schedule" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *" ]]; then
             if ! (timeout --signal=TERM --kill-after=5s 90s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/historical_recovery_v1.py --repo-root . > /tmp/pons_historical.json); then
               rm -f /tmp/pons_historical.json
