@@ -43,7 +43,9 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertNotIn("Capture public source",publish)
         self.assertNotIn("hot_collector.py --repo-root",publish)
         self.assertNotIn("collector.py --repo-root",publish)
-        self.assertIn("python public_pons_shadow/publish_gate.py",publish)
+        self.assertIn("python -B public_pons_shadow/publish_gate.py",publish)
+        self.assertIn("PYTHONDONTWRITEBYTECODE: '1'",publish)
+        self.assertIn("UNEXPECTED_PUBLIC_PONS_WRITE_PATH",publish)
 
     def test_artifact_transfer_uses_verified_immutable_action_commits(self):
         raw=WORKFLOW.read_text()
