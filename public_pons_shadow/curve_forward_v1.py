@@ -144,8 +144,10 @@ def capture(root,run_id,checkout_sha,client=None,clock=None):
                 continue
             target=fw.parse_utc(c["native_t0_utc"])+timedelta(hours=hours)
             if start<target:continue
-            if start>target+MAX_LATE or len(attempts)>=MAX_ATTEMPTS_PER_HORIZON:
+            if start>target+MAX_LATE:
                 plans.append(("MISSED",c,label,target))
+            elif len(attempts)>=MAX_ATTEMPTS_PER_HORIZON:
+                continue  # Try cap exhausted; preserve UNKNOWN until window expires.
             elif not attempts or start-fw.parse_utc(attempts[-1]["observed_at_utc"])>=RETRY_AFTER:
                 plans.append(("DUE",c,label,target))
     if source and new_today<MAX_NEW_DAILY and len(candidates)<MAX_TRACKED:
@@ -190,8 +192,14 @@ def capture(root,run_id,checkout_sha,client=None,clock=None):
                 sampled+=1
             except (ValueError,KeyError,TypeError,OSError):
                 # Unverified identity never becomes a positive observation.
-                obs=missed_snapshot(label,target,clock())
-                obs["status"]="UNKNOWN_SOURCE_IDENTITY"
+                obs={
+                    "horizon":label,"target_utc":cold.iso(target),
+                    "observed_at_utc":cold.iso(clock()),"status":"UNKNOWN_SOURCE_IDENTITY",
+                    "block_number":block,"block_hash":block_hash,
+                    "quote_reserve_wei":None,"token_reserve_raw":None,
+                    "token_decimals":None,"ratio_eth_per_token":None,
+                    "provider_timestamp_verified":False,"execution_verified":False,
+                }
         if kind=="BASELINE":
             # A baseline starts only when a valid onchain ratio is observed.
             if obs["status"]!="NATIVE_CURVE_PROXY_CAPTURED":
