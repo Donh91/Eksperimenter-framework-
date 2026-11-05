@@ -190,7 +190,8 @@ jobs:
           set -euo pipefail
           git config user.name 'public-pons-shadow-bot'
           git config user.email 'public-pons-shadow-bot@users.noreply.github.com'
-          git add -A -- public_pons_shadow
+          # Stage only bounded public JSON evidence, never Python bytecode or source.
+          git add -A -- ':(glob)public_pons_shadow/*.json' ':(glob)public_pons_shadow/**/runs/**/*.json'
           if git diff --cached --name-only | grep -Ev '^public_pons_shadow/(state\.json|hot_state\.json|forward_state\.json|forward/runs/|runs/|hot/runs/)' ; then
             echo 'UNEXPECTED_PUBLIC_PONS_WRITE_PATH'
             exit 1
