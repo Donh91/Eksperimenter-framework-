@@ -167,6 +167,9 @@ jobs:
       contents: write
     env:
       SOURCE_CHECKOUT_SHA: ${{ needs.collect.outputs.checkout_sha }}
+      # Read-only publisher imports validation modules. Never generate
+      # bytecode artifacts in the public staging/write directory.
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       # The writer does NOT invoke the network collectors or their tests.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -182,7 +185,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python public_pons_shadow/publish_gate.py --stage-dir /tmp/pons-stage \
+          python -B public_pons_shadow/publish_gate.py --stage-dir /tmp/pons-stage \
             --repo-root . --run-id "$GITHUB_RUN_ID" --checkout-sha "$SOURCE_CHECKOUT_SHA"
       - name: Publish only verified public source files, and remote-readback exact blobs
         shell: bash
