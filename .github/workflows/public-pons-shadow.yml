@@ -17,6 +17,7 @@ on:
       - 'public_pons_shadow/curve_forward_v1.py'
       - 'public_pons_shadow/curve_forward_gate_v1.py'
       - 'public_pons_shadow/coverage_custody_v1.py'
+      - 'public_pons_shadow/historical_recovery_v1.py'
   schedule:
     # Public-only HOT source observation twice per hour; COLD remains hourly.
     # GitHub schedule delivery is best effort and never guarantees full LIVE coverage.
@@ -42,6 +43,8 @@ on:
       - 'tests/test_public_pons_curve_forward_v1.py'
       - 'public_pons_shadow/coverage_custody_v1.py'
       - 'tests/test_public_pons_coverage_custody_v1.py'
+      - 'public_pons_shadow/historical_recovery_v1.py'
+      - 'tests/test_public_pons_historical_recovery_v1.py'
 
 permissions:
   contents: read
@@ -67,8 +70,8 @@ jobs:
           python-version: '3.12'
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_workflow_security_v1 -v
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/historical_recovery_v1.py
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
 
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
@@ -90,12 +93,13 @@ jobs:
           python-version: '3.12'
       - name: Validate public-source scripts, no writer credential
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/historical_recovery_v1.py
           python public_pons_shadow/collector.py --validate-only
           python public_pons_shadow/hot_collector.py --validate-only
           python public_pons_shadow/forward_outcome.py --validate-only
           python public_pons_shadow/curve_forward_v1.py --validate-only
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 -v
+          python public_pons_shadow/historical_recovery_v1.py --validate-only
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_historical_recovery_v1 -v
       - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
@@ -132,12 +136,23 @@ jobs:
             rm -f /tmp/pons_curve.json
             echo "::warning::PUBLIC_NATIVE_CURVE_DUE_DEGRADED_NO_STATE_ADVANCE"
           fi
+          # A separate public-only historical gap lane ending BEFORE the
+          # original public COLD bootstrap; never private canonical source.
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *" ]]; then
+            if ! (timeout --signal=TERM --kill-after=5s 90s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/historical_recovery_v1.py --repo-root . > /tmp/pons_historical.json); then
+              rm -f /tmp/pons_historical.json
+              echo "::warning::PUBLIC_PONS_HISTORICAL_RECOVERY_DEGRADED_NO_CURSOR_ADVANCE"
+            fi
+          else
+            rm -f /tmp/pons_historical.json
+            echo "PUBLIC_PONS_HISTORICAL_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT"
+          fi
           python - <<'PY'
           import json,os,pathlib,re,shutil
           stage=pathlib.Path('/tmp/pons-stage')
           any_data=False
           any_valid=False
-          for lane in ('hot','cold','forward','curve'):
+          for lane in ('hot','cold','forward','curve','historical'):
               f=pathlib.Path('/tmp/pons_'+lane+'.json')
               if not f.is_file():continue
               result=json.loads(f.read_text())
@@ -145,18 +160,18 @@ jobs:
                   print('::warning::PUBLIC_NATIVE_CURVE_BASELINE_UNKNOWN_NOT_PROMOTED')
                   any_valid=True
                   continue
-              if result.get('status') in ('NO_NEW_HOT_SAFE_BLOCK','NO_NEW_SAFE_BLOCK','NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE','NO_NATIVE_OBSERVATIONS_DUE'):
+              if result.get('status') in ('NO_NEW_HOT_SAFE_BLOCK','NO_NEW_SAFE_BLOCK','NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE','NO_NATIVE_OBSERVATIONS_DUE','PUBLIC_HISTORICAL_GAP_RESEARCH_COMPLETE','PUBLIC_HISTORICAL_NO_SAFE_BLOCK','PUBLIC_HISTORICAL_TARGET_UNVERIFIED_NO_ADVANCE'):
                   any_valid=True
                   continue
-              required={'hot':'PUBLIC_HOT_CAPTURED_UNPUBLISHED','cold':'PUBLIC_SHADOW_CAPTURED_UNPUBLISHED','forward':'PUBLIC_FORWARD_CAPTURED_UNPUBLISHED','curve':'PUBLIC_NATIVE_CURVE_CAPTURED_UNPUBLISHED'}
+              required={'hot':'PUBLIC_HOT_CAPTURED_UNPUBLISHED','cold':'PUBLIC_SHADOW_CAPTURED_UNPUBLISHED','forward':'PUBLIC_FORWARD_CAPTURED_UNPUBLISHED','curve':'PUBLIC_NATIVE_CURVE_CAPTURED_UNPUBLISHED','historical':'PUBLIC_HISTORICAL_CAPTURED_UNPUBLISHED'}
               if result.get('status') != required[lane]:
                   raise RuntimeError('PONS_UNKNOWN_LANE_RESULT')
               any_valid=True
               rel=pathlib.PurePosixPath(result['receipt'])
-              pattern={'hot':r'public_pons_shadow/hot/runs/','cold':r'public_pons_shadow/runs/','forward':r'public_pons_shadow/forward/runs/','curve':r'public_pons_shadow/curve/runs/'}[lane]
+              pattern={'hot':r'public_pons_shadow/hot/runs/','cold':r'public_pons_shadow/runs/','forward':r'public_pons_shadow/forward/runs/','curve':r'public_pons_shadow/curve/runs/','historical':r'public_pons_shadow/historical/runs/'}[lane]
               if re.fullmatch(pattern+r'\d{4}/\d{2}/\d{2}/\d{8}T\d{6}Z_\d{1,20}_receipt\.json',str(rel)) is None:
                   raise RuntimeError('PONS_CAPTURE_RECEIPT_PATH_INVALID')
-              state=pathlib.Path({'hot':'public_pons_shadow/hot_state.json','cold':'public_pons_shadow/state.json','forward':'public_pons_shadow/forward_state.json','curve':'public_pons_shadow/curve_state.json'}[lane])
+              state=pathlib.Path({'hot':'public_pons_shadow/hot_state.json','cold':'public_pons_shadow/state.json','forward':'public_pons_shadow/forward_state.json','curve':'public_pons_shadow/curve_state.json','historical':'public_pons_shadow/historical_state.json'}[lane])
               receipt=pathlib.Path(str(rel))
               events=receipt.with_name(receipt.name.replace('_receipt.json','_events.json'))
               for src in (state,receipt,events):
@@ -169,7 +184,7 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'],'a') as out:
               out.write('has_data='+('true' if any_data else 'false')+'\n')
           if not any_valid:raise RuntimeError('BOTH_PUBLIC_PONS_LANES_FAILED')
-          print('PUBLIC_PONS_CAPTURE_RESULT HOT_COLD_FORWARD_CURVE_INDEPENDENT has_data='+str(any_data))
+          print('PUBLIC_PONS_CAPTURE_RESULT HOT_COLD_FORWARD_CURVE_HISTORICAL_INDEPENDENT has_data='+str(any_data))
           PY
       - name: Native Pons V2 reserve proxy, push-only research diagnostic
         if: github.event_name == 'push'
@@ -256,7 +271,7 @@ jobs:
           git config user.name 'public-pons-shadow-bot'
           git config user.email 'public-pons-shadow-bot@users.noreply.github.com'
           git add -A -- public_pons_shadow
-          if git diff --cached --name-only | grep -Ev '^public_pons_shadow/(state\.json|hot_state\.json|forward_state\.json|curve_state\.json|curve/runs/|forward/runs/|runs/|hot/runs/)' ; then
+          if git diff --cached --name-only | grep -Ev '^public_pons_shadow/(state\.json|hot_state\.json|forward_state\.json|curve_state\.json|historical_state\.json|historical/runs/|curve/runs/|forward/runs/|runs/|hot/runs/)' ; then
             echo 'UNEXPECTED_PUBLIC_PONS_WRITE_PATH'
             exit 1
           fi
@@ -277,7 +292,7 @@ jobs:
           for attempt in 1 2 3; do
             git rebase --abort 2>/dev/null || true
             git fetch origin main
-            for path in public_pons_shadow/state.json public_pons_shadow/hot_state.json public_pons_shadow/forward_state.json public_pons_shadow/curve_state.json; do
+            for path in public_pons_shadow/state.json public_pons_shadow/hot_state.json public_pons_shadow/forward_state.json public_pons_shadow/curve_state.json public_pons_shadow/historical_state.json; do
               before=$(source_blob "$baseline_main" "$path")
               remote=$(source_blob origin/main "$path")
               if [ "$before" != "$remote" ]; then
