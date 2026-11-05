@@ -16,7 +16,7 @@ class TestPublicPonsSecurity(unittest.TestCase):
         raw=WORKFLOW.read_text()
         self.assertIn("pull_request:",raw)
         self.assertIn("if: github.event_name == 'pull_request'",raw)
-        self.assertIn("python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_workflow_security_v1 -v",raw)
+        self.assertIn("python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_workflow_security_v1 -v",raw)
         self.assertIn("contents: read",raw)
 
     def test_public_half_hour_hot_does_not_duplicate_private_or_cold_source(self):
@@ -77,6 +77,9 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn("PUBLIC_PONS_HOT_DEGRADED_NO_CURSOR_ADVANCE",raw)
         self.assertIn("PUBLIC_FORWARD_OUTCOME_DEGRADED_NO_STATE_ADVANCE",raw)
         self.assertIn("PUBLIC_NATIVE_CURVE_BASELINE_UNKNOWN_NOT_PROMOTED",raw)
+        self.assertIn("public_pons_shadow/coverage_custody_v1.py --repo-root .",raw)
+        self.assertIn("PUBLIC_PONS_COLD_HOT_CUSTODY_NOT_VERIFIABLE",raw)
+        self.assertIn("public-pons-cold-hot-custody-audit",raw)
         self.assertIn("public_pons_shadow/curve_forward_v1.py --repo-root .",raw)
         self.assertIn("public_pons_shadow/curve_state.json",raw)
         self.assertIn("curve/runs/",raw)
