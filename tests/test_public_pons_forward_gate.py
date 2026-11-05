@@ -113,6 +113,30 @@ class TestForwardStage(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"FORWARD_OUTCOME_AUTHORITY_OR_CLOCK_INVALID"):
             gate.validate(self.stage,self.publish,"101",SHA)
 
+    def test_three_independent_public_lanes_stage_together_without_cross_authority(self):
+        from public_pons_shadow import hot_collector as hot
+        from tests.test_public_pons_hot import FakeRPC
+        from public_pons_shadow import publish_gate
+        from unittest.mock import patch
+        self.stage_run(NOW,"101")
+        h=hot.hot_capture(self.source,cold.Client(FakeRPC(head=100)),
+                          "101",SHA,clock=lambda:NOW,window=12)
+        c=cold.collect(self.source,cold.Client(FakeRPC(head=100)),
+                       "101",SHA,clock=lambda:NOW,bootstrap=12,max_scan=12,chunk=3)
+        for out,state in ((h,hot.STATE),(c,cold.STATE)):
+            rels=[state,Path(out["receipt"]),
+                  Path(out["receipt"].replace("_receipt.json","_events.json"))]
+            for rel in rels:
+                target=self.stage/rel
+                target.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(self.source/rel,target)
+        with patch.object(publish_gate.subprocess,"run"),patch.object(
+                publish_gate.subprocess,"check_output",return_value=SHA+"\n"):
+            admitted=publish_gate.validate(self.stage,self.publish,"101",SHA)
+        self.assertEqual(len(admitted),9)
+        self.assertEqual(len(set(admitted)),9)
+        self.assertIn(fw.STATE,admitted)
+
     def test_unrelated_stage_files_not_admitted_by_public_gate(self):
         self.stage_run(NOW,"101")
         self.stage.joinpath("untrusted_user_positions.csv").write_text("wallet,private\n")
