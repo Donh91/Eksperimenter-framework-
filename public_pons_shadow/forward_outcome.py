@@ -234,6 +234,11 @@ def run(root, run_id, checkout_sha, *, clock=now_utc, reader=read_spot):
                         json.JSONDecodeError, RuntimeError):
                     result = {"state": "UNKNOWN_PROVIDER_ERROR", "price_usd": None, "pair": None}
             captured = clock()
+            # Publication/observation eligibility uses response-completion time.
+            # A provider response that arrives after the original deadline
+            # cannot be credited by the pre-request check.
+            if captured > due + MAX_LATE and result["state"] != "WINDOW_MISSED":
+                result = {"state": "WINDOW_MISSED", "price_usd": None, "pair": None}
             observation = {"horizon": label, "target_utc": stamp(due), "captured_at_utc": stamp(captured),
                            "state": result["state"], "price_usd": result.get("price_usd"),
                            "pair": result.get("pair"), "provider_timestamp_verified": False,
