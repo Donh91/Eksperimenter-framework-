@@ -19,6 +19,7 @@ on:
       - 'public_pons_shadow/coverage_custody_v1.py'
       - 'public_pons_shadow/v2_quote_math_research_v1.py'
       - 'public_pons_shadow/historical_recovery_v1.py'
+      - 'public_pons_shadow/v2_sell_phase_probe_v1.py'
   schedule:
     # Public-only HOT source observation twice per hour; COLD remains hourly.
     # GitHub schedule delivery is best effort and never guarantees full LIVE coverage.
@@ -48,6 +49,8 @@ on:
       - 'tests/test_public_pons_v2_quote_math_research_v1.py'
       - 'public_pons_shadow/historical_recovery_v1.py'
       - 'tests/test_public_pons_historical_recovery_v1.py'
+      - 'public_pons_shadow/v2_sell_phase_probe_v1.py'
+      - 'tests/test_public_pons_v2_sell_phase_probe_v1.py'
 
 permissions:
   contents: read
@@ -73,8 +76,8 @@ jobs:
           python-version: '3.12'
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/v2_quote_math_research_v1.py public_pons_shadow/historical_recovery_v1.py
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/v2_quote_math_research_v1.py public_pons_shadow/historical_recovery_v1.py public_pons_shadow/v2_sell_phase_probe_v1.py
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_v2_sell_phase_probe_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
 
   collect:
     if: github.event_name != 'pull_request' && github.repository == 'Donh91/Eksperimenter-framework-' && github.ref == 'refs/heads/main'
@@ -96,13 +99,13 @@ jobs:
           python-version: '3.12'
       - name: Validate public-source scripts, no writer credential
         run: |
-          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/historical_recovery_v1.py
+          python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/historical_recovery_v1.py public_pons_shadow/v2_sell_phase_probe_v1.py
           python public_pons_shadow/collector.py --validate-only
           python public_pons_shadow/hot_collector.py --validate-only
           python public_pons_shadow/forward_outcome.py --validate-only
           python public_pons_shadow/curve_forward_v1.py --validate-only
           python public_pons_shadow/historical_recovery_v1.py --validate-only
-          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_historical_recovery_v1 -v
+          python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_v2_sell_phase_probe_v1 tests.test_public_pons_historical_recovery_v1 -v
       - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
@@ -229,6 +232,26 @@ jobs:
           path: /tmp/public-pons-coverage-custody.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Pons V2 onchain sell phase and fee research, push-only no tx
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 90s python -B public_pons_shadow/v2_sell_phase_probe_v1.py --repo-root . > /tmp/public-pons-v2-sell-friction-shadow.json
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            rm -f /tmp/public-pons-v2-sell-friction-shadow.json
+            echo "::warning::PUBLIC_PONS_V2_SELL_FRICTION_SOURCE_UNKNOWN exit_code=$rc"
+          fi
+          exit 0
+      - name: Upload public Pons V2 phase and size-friction research only
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-pons-v2-sell-friction-research-only
+          path: /tmp/public-pons-v2-sell-friction-shadow.json
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload strictly bounded public data files, not credentials
         if: steps.stage.outputs.has_data == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # verified upstream v4 ref 2026-11-02
