@@ -31,6 +31,14 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertNotIn("Donh91/secrets", raw)
         self.assertNotIn("OPENAI_API_KEY", raw)
 
+    def test_publisher_never_stages_python_bytecode_or_untrusted_paths(self):
+        raw=WORKFLOW.read_text()
+        publisher=raw.split("\n  publish:\n",1)[1]
+        self.assertNotIn("git add -A -- public_pons_shadow\n",publisher)
+        self.assertIn("git add -A -- ':(glob)public_pons_shadow/*.json' ':(glob)public_pons_shadow/**/runs/**/*.json'",publisher)
+        self.assertIn("UNEXPECTED_PUBLIC_PONS_WRITE_PATH",publisher)
+        self.assertIn("git diff --cached --name-only | grep -Ev",publisher)
+
     def test_only_publish_job_has_write_token(self):
         raw=WORKFLOW.read_text()
         self.assertEqual(raw.count("contents: write"),1)
