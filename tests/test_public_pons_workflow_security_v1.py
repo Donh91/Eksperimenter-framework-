@@ -16,7 +16,7 @@ class TestPublicPonsSecurity(unittest.TestCase):
         raw=WORKFLOW.read_text()
         self.assertIn("pull_request:",raw)
         self.assertIn("if: github.event_name == 'pull_request'",raw)
-        self.assertIn("python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_workflow_security_v1 -v",raw)
+        self.assertIn("python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_workflow_security_v1 -v",raw)
         self.assertIn("contents: read",raw)
 
     def test_public_half_hour_hot_does_not_duplicate_private_or_cold_source(self):
@@ -61,7 +61,7 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn('source_blob origin/main "$path"',publisher)
         self.assertIn("PUBLIC_PONS_CONCURRENT_CURSOR_CHANGE_NO_OVERWRITE",publisher)
         self.assertLess(publisher.index("PUBLIC_PONS_CONCURRENT_CURSOR_CHANGE_NO_OVERWRITE"),publisher.index("git push origin HEAD:main"))
-        for path in ("public_pons_shadow/state.json","public_pons_shadow/hot_state.json"):
+        for path in ("public_pons_shadow/state.json","public_pons_shadow/hot_state.json","public_pons_shadow/forward_state.json"):
             self.assertIn(path,publisher)
 
     def test_no_untrusted_privileged_events(self):
@@ -73,6 +73,11 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn("cancel-in-progress: false",raw)
         self.assertIn("PUBLIC_PONS_COLD_DEGRADED_NO_CURSOR_ADVANCE",raw)
         self.assertIn("PUBLIC_PONS_HOT_DEGRADED_NO_CURSOR_ADVANCE",raw)
+        self.assertIn("PUBLIC_FORWARD_OUTCOME_DEGRADED_NO_STATE_ADVANCE",raw)
+        self.assertIn("public_pons_shadow/forward_outcome.py --repo-root .",raw)
+        self.assertIn("forward/runs/",raw)
+        self.assertNotIn("Donh91/secrets",raw)
+        self.assertNotIn("OPENAI_API_KEY",raw)
         self.assertEqual(raw.count("timeout --signal=TERM --kill-after=5s 240s env GITHUB_CHECKOUT_SHA"),2)
         self.assertNotIn("live-source-canary:",raw)
         self.assertIn("rm -f /tmp/pons_cold.json",raw)
