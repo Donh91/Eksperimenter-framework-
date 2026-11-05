@@ -6,6 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from public_pons_shadow import collector as cold
+from public_pons_shadow import native_curve_diagnostic_v1 as native
 from public_pons_shadow import curve_forward_v1 as curve
 from public_pons_shadow import v2_sell_phase_probe_v1 as sell
 from tests.test_public_pons_native_curve_diagnostic_v1 import (
