@@ -26,7 +26,7 @@ except ImportError:
 CONTRACT="PUBLIC_PONS_NATIVE_DUE_SHADOW_V1"
 STATE=Path("public_pons_shadow/curve_state.json")
 HISTORY=Path("public_pons_shadow/curve/runs")
-MAX_TRACKED=24
+MAX_TRACKED=240
 MAX_NEW_DAILY=2
 MAX_SAMPLES_PER_TICK=4
 MAX_ATTEMPTS_PER_HORIZON=3
