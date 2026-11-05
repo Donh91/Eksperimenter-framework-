@@ -16,9 +16,11 @@ from pathlib import Path
 
 try:
     from public_pons_shadow import forward_gate, curve_forward_gate_v1 as curve_gate
+    from public_pons_shadow import historical_recovery_v1 as historical
 except ImportError:
     import forward_gate
     import curve_forward_gate_v1 as curve_gate
+    import historical_recovery_v1 as historical
 
 CHAIN_ID=4663
 FACTORY="0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e"
@@ -26,6 +28,7 @@ TOPIC0="0x8d4aad4953d0ca700d468f3753aa14432d1b35b43ec6409f051fb6aa43a89607"
 CONTRACTS={
   "cold":("PUBLIC_PONS_V2_FACTORY_EXHAUSTIVE_SHADOW_V1","PUBLIC_SOURCE_SHADOW_ONLY","PUBLIC_SHADOW_ONLY"),
   "hot":("PUBLIC_PONS_V2_HOT_SHADOW_V1","PUBLIC_HOT_SHADOW_ONLY","PUBLIC_HOT_SHADOW_ONLY"),
+  "historical":("PUBLIC_PONS_V2_FACTORY_EXHAUSTIVE_SHADOW_V1","PUBLIC_SOURCE_SHADOW_ONLY","PUBLIC_SHADOW_ONLY"),
 }
 MAX_FILE=2_000_000
 
@@ -58,7 +61,7 @@ def validate(stage,root,run_id,checkout_sha):
         raise ValueError("PONS_CHECKOUT_INVALID")
     # Never accept symlink/extra files, including unexpected metadata and paths.
     files=[p for p in stage.rglob("*") if p.is_file() or p.is_symlink()]
-    if not 3<=len(files)<=12:
+    if not 3<=len(files)<=15:
         raise ValueError("PONS_STAGE_FILE_COUNT_INVALID")
     for file in files:
         if file.is_symlink() or not file.resolve().is_relative_to(stage.resolve()):
@@ -69,8 +72,10 @@ def validate(stage,root,run_id,checkout_sha):
                 raise ValueError("PONS_SYMLINKED_STAGE_ANCESTOR")
     expected=set()
     updates=[]
-    for lane in ("hot","cold"):
-        state_rel=Path("public_pons_shadow/hot_state.json" if lane=="hot" else "public_pons_shadow/state.json")
+    for lane in ("hot","cold","historical"):
+        state_rel=Path({"hot":"public_pons_shadow/hot_state.json",
+                        "cold":"public_pons_shadow/state.json",
+                        "historical":"public_pons_shadow/historical_state.json"}[lane])
         state_file=stage/state_rel
         if not state_file.exists():
             continue
@@ -84,7 +89,9 @@ def validate(stage,root,run_id,checkout_sha):
             or state.get("authority")!=state_authority
             or state.get("last_run_id")!=run_id):
             raise ValueError("PONS_STATE_INVALID")
-        dirname=Path("public_pons_shadow/hot/runs" if lane=="hot" else "public_pons_shadow/runs")
+        dirname=Path({"hot":"public_pons_shadow/hot/runs",
+                      "cold":"public_pons_shadow/runs",
+                      "historical":"public_pons_shadow/historical/runs"}[lane])
         receipts=[p for p in files if p.name.endswith("_receipt.json")
                   and p.relative_to(stage).as_posix().startswith(dirname.as_posix()+"/")]
         if len(receipts)!=1:
@@ -141,6 +148,26 @@ def validate(stage,root,run_id,checkout_sha):
                 or not receipt.get("complete_bounded_range")
                 or (prev is not None and receipt["from_block"]!=prev+1)):
                 raise ValueError("PONS_COLD_CONTINUITY_INVALID")
+            if lane=="historical":
+                # Public gap recovery is a third independent source-only
+                # cursor, NEVER the private canonical or ordinary COLD cursor.
+                cold_state_file=root/"public_pons_shadow/state.json"
+                if not cold_state_file.is_file():
+                    raise ValueError("PONS_HISTORICAL_COLD_BOOTSTRAP_MISSING")
+                cold_state=loads(cold_state_file)
+                upper=cold_state.get("bootstrap_from_block")
+                if (type(upper)is not int or upper<=historical.START_BLOCK
+                    or type(receipt.get("to_block"))is not int
+                    or receipt["from_block"]<historical.START_BLOCK
+                    or receipt["to_block"]>=upper
+                    or state.get("bootstrap_from_block")!=historical.START_BLOCK
+                    or receipt.get("bootstrap_not_full_history") is not (before is None)):
+                    raise ValueError("PONS_HISTORICAL_BOUNDARY_OR_BOOTSTRAP_INVALID")
+                if prev is None and receipt["from_block"]!=historical.START_BLOCK:
+                    raise ValueError("PONS_HISTORICAL_UNVERIFIED_START")
+                if (receipt["to_block"]-receipt["from_block"]+1>
+                    historical.MAX_BLOCKS_PER_RUN):
+                    raise ValueError("PONS_HISTORICAL_RATE_BUDGET_BREACH")
         expected.update((state_file,rp,ep))
         updates.extend((state_rel,rp.relative_to(stage),ep.relative_to(stage)))
     # A separate public-only forward outcome lane has its own immutable
@@ -165,7 +192,8 @@ def validate(stage,root,run_id,checkout_sha):
                    "public_pons_shadow/forward_gate.py",
                    "public_pons_shadow/curve_forward_v1.py",
                    "public_pons_shadow/curve_forward_gate_v1.py",
-                   "public_pons_shadow/native_curve_diagnostic_v1.py"):
+                   "public_pons_shadow/native_curve_diagnostic_v1.py",
+                   "public_pons_shadow/historical_recovery_v1.py"):
         source_blob=subprocess.check_output(["git","rev-parse",checkout_sha+":"+source],text=True).strip()
         target_blob=subprocess.check_output(["git","rev-parse","HEAD:"+source],text=True).strip()
         if source_blob!=target_blob:
