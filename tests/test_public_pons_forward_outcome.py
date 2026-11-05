@@ -144,6 +144,33 @@ class TestPublicForward(unittest.TestCase):
         self.assertEqual(self.execute(NOW+timedelta(hours=24,minutes=20),"102")["event_count"],2)
         self.assertEqual(len(self.state()["candidates"]),2)
 
+
+    def test_same_run_new_hot_receipt_is_not_mistaken_for_published_source(self):
+        original=fake_source(self.root,seen=NOW-timedelta(minutes=20))
+        latest=fake_source(self.root,seen=NOW-timedelta(minutes=1))
+        receipt=json.loads(latest.read_text())
+        receipt["github_run_id"]="101"  # current run has not published HOT yet
+        receipt["sha256"]=cold.hash_obj({k:v for k,v in receipt.items() if k!="sha256"})
+        latest.write_bytes(cold.encode(receipt))
+        self.execute(NOW,"101")
+        for c in self.state()["candidates"]:
+            self.assertEqual(c["source_receipt"],original.relative_to(self.root).as_posix())
+            self.assertEqual(c["source_machine_observed_utc"],cold.iso(NOW-timedelta(minutes=20)))
+
+    def test_post_window_provider_response_is_censored_at_completion_clock(self):
+        fake_source(self.root)
+        clock={"value":NOW}
+        def timed():
+            return clock["value"]
+        def slow_provider(token,pair):
+            clock["value"]=NOW+timedelta(hours=5)
+            return {"state":"PUBLIC_SPOT_OBSERVED_NON_EXECUTABLE",
+                    "price_usd":"999","pair":POOL}
+        fw.run(self.root,"101",SHA,clock=timed,reader=slow_provider)
+        for c in self.state()["candidates"]:
+            self.assertEqual(c["observations"]["BASELINE"]["state"],"WINDOW_MISSED")
+            self.assertIsNone(c["observations"]["BASELINE"]["price_usd"])
+
     def test_no_user_wallet_fields_ever_in_public_state(self):
         fake_source(self.root)
         self.execute(NOW,"101")

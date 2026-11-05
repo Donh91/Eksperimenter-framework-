@@ -52,14 +52,16 @@ def parse_utc(value):
     return dt
 
 
-def load_public_hot(root, now):
-    """Admit at most one already committed, self-hashed HOT batch."""
+def load_public_hot(root, now, *, exclude_run_id=None):
+    """Admit at most one previously published HOT batch, never this run's staged HOT."""
     paths = sorted((root / "public_pons_shadow/hot/runs").glob("**/*_receipt.json"), reverse=True)
     for rp in paths[:30]:
         if rp.is_symlink() or rp.stat().st_size > 2_000_000:
             continue
         try:
             r = json.loads(rp.read_text())
+            if r.get("github_run_id") == exclude_run_id:
+                continue  # Newly captured in working tree, not yet published.
             if (r.get("sha256") != cold.hash_obj({k: v for k, v in r.items() if k != "sha256"})
                 or r.get("authority") != "PUBLIC_HOT_SHADOW_ONLY"
                 or r.get("contract") != "PUBLIC_PONS_V2_HOT_SHADOW_V1"
@@ -164,7 +166,7 @@ def run(root, run_id, checkout_sha, *, clock=now_utc, reader=read_spot):
     today = stamp(start)[:10]
     daily = sum(c["t0_utc"].startswith(today) for c in candidates)
     # This source may be missing: that is UNKNOWN, not evidence of zero launches.
-    source = load_public_hot(root, start) if daily < MAX_NEW_DAILY else None
+    source = load_public_hot(root, start, exclude_run_id=run_id) if daily < MAX_NEW_DAILY else None
     if source and len(candidates) < MAX_TRACKED:
         path, sha, observed, raw = source
         for block, index, token, pool, tx in raw:
@@ -211,6 +213,10 @@ def run(root, run_id, checkout_sha, *, clock=now_utc, reader=read_spot):
                         json.JSONDecodeError, RuntimeError):
                     result = {"state": "UNKNOWN_PROVIDER_ERROR", "price_usd": None, "pair": None}
             captured = clock()
+            # Eligibility is determined at the response completion clock, not
+            # merely before the source request. Never credit a late response.
+            if captured > due + MAX_LATE and result["state"] != "WINDOW_MISSED":
+                result = {"state": "WINDOW_MISSED", "price_usd": None, "pair": None}
             observation = {"horizon": label, "target_utc": stamp(due), "captured_at_utc": stamp(captured),
                            "state": result["state"], "price_usd": result.get("price_usd"),
                            "pair": result.get("pair"), "provider_timestamp_verified": False,
