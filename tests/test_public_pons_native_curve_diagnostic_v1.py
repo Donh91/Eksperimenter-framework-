@@ -85,7 +85,7 @@ class NativeCurveTests(unittest.TestCase):
             self.assertEqual(item["original_t0_utc"],cold.iso(NOW))
             self.assertIs(item["economic_edge_verified"],False)
         self.assertEqual((self.root/fw.STATE).read_bytes(),state_before)
-        self.assertTrue(all(p[1][-1]==hex(200) for name,p in client.calls if name=="eth_call"))
+        self.assertTrue(all(params[-1]==hex(200) for name,params in client.calls if name=="eth_call"))
 
     def test_custom_pair_yields_unknown_not_usd_price_or_rpc_call(self):
         seed(self.root,pair="0x"+"a"*40)
