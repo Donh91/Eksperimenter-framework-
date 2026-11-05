@@ -136,7 +136,8 @@ def load_state(root):
 
 
 def collect(root,client,run_id,checkout_sha,clock=now,
-            max_scan=MAX_SCAN,bootstrap=40000,chunk=MAX_CHUNK):
+            max_scan=MAX_SCAN,bootstrap=40000,chunk=MAX_CHUNK,
+            explicit_start=None,stop_before=None):
     if not 1<=max_scan<=MAX_SCAN or not 1<=bootstrap<=40000 or not 1<=chunk<=MAX_CHUNK:
         raise ValueError("SCAN_LIMIT_INVALID")
     if (re.fullmatch(r"[0-9]{1,20}",run_id) is None
@@ -144,13 +145,24 @@ def collect(root,client,run_id,checkout_sha,clock=now,
         raise ValueError("RUN_OR_CHECKOUT_SHA_INVALID")
     started=clock()
     existing=load_state(root)
+    # Optional research-only historical bounded interval, never alters the
+    # default public COLD path or authorizes a private canonical cursor.
+    if explicit_start is not None:
+        if type(explicit_start) is not int or explicit_start<0:
+            raise ValueError("EXPLICIT_SOURCE_START_INVALID")
+        if existing is not None and existing["bootstrap_from_block"]!=explicit_start:
+            raise ValueError("EXPLICIT_SOURCE_BOOTSTRAP_DRIFT")
+    if stop_before is not None and (type(stop_before) is not int or stop_before<0):
+        raise ValueError("EXPLICIT_SOURCE_STOP_INVALID")
     client.connect()
     safe_head=as_int(client.call("eth_blockNumber",[]))-2
     if safe_head<0: raise RuntimeError("SAFE_HEAD_INVALID")
-    lo=max(0,safe_head-bootstrap+1) if existing is None else existing["last_scanned_block"]+1
+    lo=(explicit_start if explicit_start is not None else max(0,safe_head-bootstrap+1)) if existing is None else existing["last_scanned_block"]+1
+    if stop_before is not None and lo>stop_before:
+        return dict(status="PUBLIC_HISTORICAL_GAP_RESEARCH_COMPLETE",last_scanned_block=lo-1)
     if lo>safe_head:
         return dict(status="NO_NEW_SAFE_BLOCK",safe_head=safe_head)
-    hi=min(safe_head,lo+max_scan-1)
+    hi=min(safe_head,lo+max_scan-1,stop_before if stop_before is not None else safe_head)
     events=[]
     calls=0
     for begin in range(lo,hi+1,chunk):
