@@ -51,6 +51,8 @@ class FeePhaseClient(FakeClient):
                sell.SEL_READY:int(self.ready),
                sell.SEL_GRADUATED:int(self.graduated),
             }
+            if selector==native.DECIMALS_SELECTOR:
+                return "0x"+word(18)  # Strict ABI uint8 is 32-byte padded in eth_call.
             if selector in raw:return "0x"+word(raw[selector])
         return super().call(method,params)
 
