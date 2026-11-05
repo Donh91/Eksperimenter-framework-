@@ -87,8 +87,8 @@ The EXISTING `Public Pons V2 Factory Shadow` schedule now runs an independently
 bounded **due-only spot-observation lane** in addition to HOT and COLD public
 factory-log collection. It has no separate schedule or private Actions runner.
 
-- **Source:** only original, already committed public HOT launch receipts and
-  their verified event-file digest. The event is observed, not an exhaustive
+- **Source:** only original, **already committed and byte-identical to Git HEAD** public HOT launch receipts and
+  their verified event-file digest. A HOT receipt from the **same not-yet-published workflow run is ineligible**. The event is observed, not an exhaustive
   launch census. Indexed source identity is chain 4663 + exact token and curve,
   not ticker. No private Alpha Lab watchlists, wallet positions or secrets.
 - **Freeze:** at most two new distinct public HOT tokens per UTC day and 240
