@@ -138,7 +138,11 @@ jobs:
               f=pathlib.Path('/tmp/pons_'+lane+'.json')
               if not f.is_file():continue
               result=json.loads(f.read_text())
-              if result.get('status') in ('NO_NEW_HOT_SAFE_BLOCK','NO_NEW_SAFE_BLOCK','NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE','NO_NATIVE_OBSERVATIONS_DUE','NO_VALID_NATIVE_SOURCE_OR_RPC'):
+              if result.get('status') == 'NO_VALID_NATIVE_SOURCE_OR_RPC':
+                  print('::warning::PUBLIC_NATIVE_CURVE_BASELINE_UNKNOWN_NOT_PROMOTED')
+                  any_valid=True
+                  continue
+              if result.get('status') in ('NO_NEW_HOT_SAFE_BLOCK','NO_NEW_SAFE_BLOCK','NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE','NO_NATIVE_OBSERVATIONS_DUE'):
                   any_valid=True
                   continue
               required={'hot':'PUBLIC_HOT_CAPTURED_UNPUBLISHED','cold':'PUBLIC_SHADOW_CAPTURED_UNPUBLISHED','forward':'PUBLIC_FORWARD_CAPTURED_UNPUBLISHED','curve':'PUBLIC_NATIVE_CURVE_CAPTURED_UNPUBLISHED'}
