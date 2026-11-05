@@ -134,7 +134,7 @@ def read_spot(token, pair=None):
             continue
         eligible.append((liq, p, str(x["priceUsd"])))
     if not eligible:
-        return {"state": "UNKNOWN_EXACT_PUBLIC_PAIR", "price_usd": None, "pair": pair}
+        return {"state": "UNKNOWN_EXACT_PUBLIC_PAIR", "price_usd": None, "pair": None}
     eligible.sort(key=lambda z: (-z[0], z[1]))
     # Pair fixed at baseline: never migrate to whichever pool later outperforms.
     _, chosen, px = eligible[0]
