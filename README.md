@@ -81,6 +81,42 @@ The workflow intentionally fails its final validation step if fewer than all 12 
 
 `scripts/normalize_validate_btc_d.py` validates an unedited TradingView BTC.D export with continuous daily coverage, no duplicates, no gaps, dispersed anchors and no interpolation or backdating.
 
+## Public Pons 24h/72h forward source-outcome observer
+
+The EXISTING `Public Pons V2 Factory Shadow` schedule now runs an independently
+bounded **due-only spot-observation lane** in addition to HOT and COLD public
+factory-log collection. It has no separate schedule or private Actions runner.
+
+- **Source:** only original, already committed public HOT launch receipts and
+  their verified event-file digest. The event is observed, not an exhaustive
+  launch census. Indexed source identity is chain 4663 + exact token and curve,
+  not ticker. No private Alpha Lab watchlists, wallet positions or secrets.
+- **Freeze:** at most two new distinct public HOT tokens per UTC day and 240
+  lifetime. Research T0 starts when the public observer first creates the
+  frozen record. The earlier source log/block is never upgraded to first-known
+  T0, and source-chain launch time is not a provider price timestamp.
+- **Outcome:** fixed initial public DexScreener token-pair observation and
+  due-only +24h and +72h snapshots, maximum four short-timeout requests per
+  run. Pair selection occurs only at baseline and cannot chase whichever later
+  pool rises. Captures more than four hours late become `WINDOW_MISSED`, and
+  source errors or missing baseline become explicitly `UNKNOWN`.
+- **Integrity:** hashed, append-only frozen T0 and outcomes; a dedicated stage
+  validator independently binds the original HOT receipt and validates all
+  receipt hashes, immutable T0 and candidate identity, expected event deltas,
+  public-only allowlisted fields, and separate forward-state cursor before the
+  existing restricted publisher can push.
+- **Scientific limit:** `PUBLIC_RESEARCH_ONLY`, `first_known_verified=false`,
+  `execution_verified=false`, `realizable_net_return=null`, no alert,
+  signing or trade. Even a positive spot move does not prove an achievable
+  entry, fee-adjusted exit or economic edge. Public source gaps and GitHub
+  schedule delays remain visible and do not become source-complete receipts.
+
+This separate public Pons experiment does **not** replace private Alpha source
+#120 or outcome #77, nor backfill historical missed windows. Admitting public
+spot records to private research would require an independent source-clock,
+chain/CA, privacy, denominator and execution quote gate. Followup cohorts
+remain fixed and public-only.
+
 ## Authority boundary
 
-No market call. No portfolio action. No automatic rule ratification. No model-weight change. No canonical promotion. No self-merge of experimental findings.
+No market order or wallet transaction. No portfolio action. No automatic rule ratification. No model-weight change. No canonical promotion. No self-merge of experimental findings.
