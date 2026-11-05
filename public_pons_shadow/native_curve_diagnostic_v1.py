@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from datetime import datetime, timezone
 from decimal import Decimal, localcontext
 from pathlib import Path
@@ -80,10 +81,24 @@ def read_proxies(root, client, *, clock=lambda:datetime.now(timezone.utc)):
             "token_cohort":"EXISTING_FORWARD_FROZEN_MAX2",
             "candidate_count":0,"results":[]}
     state_file=root/forward_outcome.STATE
-    if not state_file.exists():
-        result["status"]="NO_PUBLIC_FORWARD_FREEZE"
-        return cold.signed(result)
-    state=forward_gate.read(state_file)
+    # Never use a newly staged forward freeze that has not been committed to
+    # the public repository. Production jobs have an actual .git checkout.
+    if (root/".git").exists():
+        try:
+            raw=subprocess.check_output(
+                ["git","show","HEAD:"+forward_outcome.STATE.as_posix()],
+                cwd=root,stderr=subprocess.DEVNULL,timeout=4)
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired,OSError):
+            result["status"]="NO_PRIOR_PUBLISHED_FORWARD_FREEZE"
+            return cold.signed(result)
+        if len(raw)>2_000_000:
+            raise ValueError("PONS_NATIVE_FORWARD_STATE_OVERSIZED")
+        state=json.loads(raw)
+    else:
+        if not state_file.exists():
+            result["status"]="NO_PUBLIC_FORWARD_FREEZE"
+            return cold.signed(result)
+        state=forward_gate.read(state_file)
     if (state.get("contract")!=forward_outcome.CONTRACT
         or state.get("authority")!="PUBLIC_RESEARCH_ONLY"
         or state.get("sha256")!=cold.hash_obj({k:v for k,v in state.items() if k!="sha256"})
