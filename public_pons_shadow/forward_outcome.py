@@ -26,6 +26,7 @@ STATE = Path("public_pons_shadow/forward_state.json")
 HISTORY = Path("public_pons_shadow/forward/runs")
 MAX_NEW_DAILY = 2
 MAX_CALLS_PER_RUN = 4
+MAX_BASELINE_ATTEMPTS = 8
 MAX_TRACKED = 240
 MAX_SOURCE_AGE = timedelta(hours=2)
 MAX_LATE = timedelta(hours=4)
@@ -196,6 +197,9 @@ def run(root, run_id, checkout_sha, *, clock=now_utc, reader=read_spot):
             at = clock()
             if at < due:
                 continue
+            if (label == "BASELINE" and at <= due + MAX_LATE
+                and sum(k.startswith("BASELINE_ATTEMPT_") for k in c["observations"]) >= MAX_BASELINE_ATTEMPTS):
+                continue
             if at > due + MAX_LATE:
                 result = {"state": "WINDOW_MISSED", "price_usd": None, "pair": None}
             elif calls >= MAX_CALLS_PER_RUN:
@@ -217,11 +221,19 @@ def run(root, run_id, checkout_sha, *, clock=now_utc, reader=read_spot):
             # merely before the source request. Never credit a late response.
             if captured > due + MAX_LATE and result["state"] != "WINDOW_MISSED":
                 result = {"state": "WINDOW_MISSED", "price_usd": None, "pair": None}
-            observation = {"horizon": label, "target_utc": stamp(due), "captured_at_utc": stamp(captured),
+            # Missing public prices during the first four hours are retryable,
+            # not a successful/failed/terminal BASELINE. Never rewrite an
+            # existing frozen observation, including old terminal UNKNOWN rows.
+            attempt = (label == "BASELINE" and captured <= due + MAX_LATE
+                       and result["state"] in ("UNKNOWN_EXACT_PUBLIC_PAIR", "UNKNOWN_PROVIDER_ERROR"))
+            key = ("BASELINE_ATTEMPT_" + str(1 + sum(
+                   k.startswith("BASELINE_ATTEMPT_") for k in c["observations"]))) if attempt else label
+            observation = {"horizon": "BASELINE_ATTEMPT" if attempt else label,
+                           "target_utc": stamp(due), "captured_at_utc": stamp(captured),
                            "state": result["state"], "price_usd": result.get("price_usd"),
                            "pair": result.get("pair"), "provider_timestamp_verified": False,
                            "execution_verified": False, "realizable_net_return": None}
-            c["observations"][label] = observation
+            c["observations"][key] = observation
             events.append({"id": c["id"], **observation})
     if not events:
         return {"status": "NO_DUE_OR_ELIGIBLE_PUBLIC_SAMPLE", "source_calls": calls}
