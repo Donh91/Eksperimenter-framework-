@@ -22,10 +22,14 @@ on:
       - 'public_pons_shadow/historical_recovery_v1.py'
       - 'public_pons_shadow/v2_sell_phase_probe_v1.py'
   schedule:
-    # Public-only HOT source observation twice per hour; COLD remains hourly.
-    # GitHub schedule delivery is best effort and never guarantees full LIVE coverage.
+    # Original public-only Pons HOT, 5-minute guarded observation pilot.
+    # Ten extra slots + original :27 and :57 = 2,7,...,57 each hour.
+    # COLD + historical recovery stay on :27 only; forward/curve stay :27/:57.
+    # Cron is best effort, NOT 5-minute SLA or canonical LIVE provenance.
+    # Public runner is free but public RPC/network calls and git growth are bounded.
     - cron: '27 * * * *'
     - cron: '57 * * * *'
+    - cron: '2,7,12,17,22,32,37,42,47,52 * * * *'
   workflow_dispatch:
   pull_request:
     paths:
@@ -132,17 +136,22 @@ jobs:
             rm -f /tmp/pons_cold.json
             echo "PUBLIC_PONS_COLD_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT"
           fi
-          # Public-only forward outcomes: a due-only observer of already-published HOT logs.
-          # No user-private lists and no extra cron or paid API.
-          if ! (timeout --signal=TERM --kill-after=5s 35s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/forward_outcome.py --repo-root . > /tmp/pons_forward.json); then
-            rm -f /tmp/pons_forward.json
-            echo "::warning::PUBLIC_FORWARD_OUTCOME_DEGRADED_NO_STATE_ADVANCE"
-          fi
-          # Native ETH/token virtual reserve ratio, due-only and source-bound.
-          # No new cron, private writer or executable return signal.
-          if ! (timeout --signal=TERM --kill-after=5s 120s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/curve_forward_v1.py --repo-root . > /tmp/pons_curve.json); then
-            rm -f /tmp/pons_curve.json
-            echo "::warning::PUBLIC_NATIVE_CURVE_DUE_DEGRADED_NO_STATE_ADVANCE"
+          # 5-minute slots capture HOT only. Forward horizons and curve probes
+          # remain on the original :27/:57 half-hour slots to avoid 6x
+          # amplification of external free-provider traffic.
+          # Manual/push retain the previous full bounded behavior.
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "57 * * * *" ]]; then
+            if ! (timeout --signal=TERM --kill-after=5s 35s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/forward_outcome.py --repo-root . > /tmp/pons_forward.json); then
+              rm -f /tmp/pons_forward.json
+              echo "::warning::PUBLIC_FORWARD_OUTCOME_DEGRADED_NO_STATE_ADVANCE"
+            fi
+            if ! (timeout --signal=TERM --kill-after=5s 120s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/curve_forward_v1.py --repo-root . > /tmp/pons_curve.json); then
+              rm -f /tmp/pons_curve.json
+              echo "::warning::PUBLIC_NATIVE_CURVE_DUE_DEGRADED_NO_STATE_ADVANCE"
+            fi
+          else
+            rm -f /tmp/pons_forward.json /tmp/pons_curve.json
+            echo "PUBLIC_DUE_ONLY_FORWARD_CURVE_INTENTIONALLY_SKIPPED_HOT_FIVE_MINUTE_SLOT"
           fi
           # Research-only 30k-block historical interval, never canonical
           # source or retroactive launch credit. Existing hourly COLD slot.
