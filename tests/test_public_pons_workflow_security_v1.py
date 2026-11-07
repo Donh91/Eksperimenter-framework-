@@ -1,5 +1,6 @@
 """Offline regression for public HOT/COLD source and separate credential boundary."""
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -30,6 +31,39 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertEqual(raw.count("python public_pons_shadow/collector.py --repo-root ."), 1)
         self.assertNotIn("Donh91/secrets", raw)
         self.assertNotIn("OPENAI_API_KEY", raw)
+
+    def test_public_five_minute_hot_only_cost_and_authority_controls(self):
+        raw = WORKFLOW.read_text()
+        # All 12 official UTC slots are spaced exactly 5 minutes apart.
+        # Preserve original :27 COLD and :57 half-hour due-only, with no
+        # duplicate schedule or new private cron/workflow.
+        crons = re.findall(r"^\\s*- cron: '([^']+)'$", raw, flags=re.MULTILINE)
+        self.assertEqual(len(crons), 3)
+        self.assertIn("27 * * * *", crons)
+        self.assertIn("57 * * * *", crons)
+        all_minutes = []
+        for expr in crons:
+            fields = expr.split()
+            self.assertEqual(len(fields), 5)
+            self.assertEqual(fields[1:], ["*", "*", "*", "*"])
+            all_minutes += [int(x) for x in fields[0].split(",")]
+        self.assertEqual(len(all_minutes), len(set(all_minutes)))
+        self.assertEqual(set(all_minutes), set(range(2, 60, 5)))
+        self.assertEqual(len(all_minutes), 12)
+        self.assertIn("PUBLIC_PONS_COLD_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT", raw)
+        self.assertIn("PUBLIC_PONS_HISTORICAL_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT", raw)
+        self.assertIn("PUBLIC_DUE_ONLY_FORWARD_CURVE_INTENTIONALLY_SKIPPED_HOT_FIVE_MINUTE_SLOT", raw)
+        self.assertIn('"$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *"', raw)
+        self.assertIn('"$PUBLIC_PONS_SCHEDULE_SLOT" == "57 * * * *"', raw)
+        self.assertEqual(raw.count("python public_pons_shadow/hot_collector.py --repo-root ."), 1)
+        self.assertEqual(raw.count("python public_pons_shadow/collector.py --repo-root ."), 1)
+        self.assertEqual(raw.count("python public_pons_shadow/forward_outcome.py --repo-root ."), 1)
+        self.assertEqual(raw.count("python public_pons_shadow/curve_forward_v1.py --repo-root ."), 1)
+        self.assertNotIn("repository_dispatch:", raw)
+        self.assertNotIn("pull_request_target:", raw)
+        self.assertNotIn("Donh91/secrets", raw)
+        self.assertNotIn("OPENAI_API_KEY", raw)
+        self.assertNotIn("wallet_address", raw)
 
     def test_only_publish_job_has_write_token(self):
         raw=WORKFLOW.read_text()
