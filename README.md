@@ -125,3 +125,42 @@ remain fixed and public-only.
 ## Authority boundary
 
 No market order or wallet transaction. No portfolio action. No automatic rule ratification. No model-weight change. No canonical promotion. No self-merge of experimental findings.
+
+## Public Pons 5-minute HOT cadence, bounded owner pilot (2026-11-07)
+
+The existing `Public Pons V2 Factory Shadow` public-repository workflow
+has been configured for 12 UTC HOT observation opportunities per hour:
+`:02, :07, :12, :17, :22, :27, :32, :37, :42, :47, :52, :57`.
+This is **not** a promise that GitHub delivers a schedule on time.
+It uses the same public read-only source and the existing verified
+HOT collector, source validator, artifact handoff and single guarded publisher.
+No new scanner, workflow, identity, secret, paid API or private runner.
+
+- **Every scheduled opportunity:** bounded HOT recent-tail source observation, exact
+  chain 4663/factory/topic and anchor check, explicit unknown historical gaps,
+  immutable source receipt and independent publish gate. No canonical live/
+  first-known promotion or BUY authority.
+- **Only :27:** original COLD/exhaustive and original historical recovery.
+- **Only :27 and :57:** original due-only forward outcomes and native-curve
+  research, to avoid sixfold growth in external quote/API requests.
+- **Pull request:** original full offline and workflow-security CI only, no
+  network source scans or write token in PR jobs.
+- **Push and manual dispatch:** original bounded behaviors retained.
+
+The public standard GitHub-hosted runner does not consume private Actions
+minutes, but free public compute does **not** remove provider limits, Git
+history/artifact storage growth, or resource quotas. Public receipt data may
+be copied to a private domain only through its original safe import/contract
+and remains `PUBLIC_RESEARCH_ONLY`; none of this yields canonical
+prospective first-known or public website permission.
+
+**Acceptance is natural-run evidence, not PR CI alone:** check an actual
+postmerge `event=schedule` with the new cron, original source-scoped HOT
+receipt, monotonic correct cursor/continuity or explicit UNKNOWN gaps, independent
+published-main readback, and no extra scheduled private job. Check several
+successive natural runs and 24h actual API/log sizes/HTTP failures before
+classifying cadence as *operationally effective*. If delays, provider throttling,
+gaps or repo growth worsen, **do not** claim a 5-minute data SLA. Revert or
+reduce frequency with an exact-head reviewed owner PR while preserving existing
+source receipts. The 90-minute source/first-known qualification remains
+independently binding in the Alpha Lab original owner #120/#70.
