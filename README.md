@@ -164,3 +164,40 @@ gaps or repo growth worsen, **do not** claim a 5-minute data SLA. Revert or
 reduce frequency with an exact-head reviewed owner PR while preserving existing
 source receipts. The 90-minute source/first-known qualification remains
 independently binding in the Alpha Lab original owner #120/#70.
+
+## Existing public Pons source: Gap Intelligence read-only log (2026-11-07)
+
+The original `public-pons-shadow.yml` collect job now runs
+`public_pons_shadow/gap_observer_v1.py` **after** HOT source capture and **before** the
+original publisher. This is an offline metadata validator, not an additional
+scanner/provider/scheduler or writer. The only output is one compact
+`PUBLIC_PONS_GAP_INTELLIGENCE {json}` line in existing GitHub job logs.
+No extra token/market-address export, API call, file artifact or commit.
+
+The diagnostic verifies the exact public source checkout/run ID, current
+authenticated-by-hash HOT state, the original immutable receipt file and
+its original events digest, explicit unknown blocks in the original HOT gap
+ledger, and the source scan completion clock. Original event bytes remain
+inside the existing source producer and are never copied into the diagnostic.
+It reports a new gap as an observed unscanned block interval, **not** as
+recovered original launches, an independent provider attestation or prospective
+first-known. It cannot prove the intended exact cron time because
+`github.event.schedule` gives the matching *expression*, not which delayed
+5-minute occurrence was originally due. GitHub run `created_at` and past
+expected delivery require an independent external check; S5 already owns
+the deduplicated hourly read-only observation and original issue #120 receipts.
+
+Source capture failure produces `UNKNOWN_CAPTURE_NOT_PRESENT`, not zero
+launches or a fake negative outcome. A self-hash mismatch, injected JSON,
+wrong SHA/run, an unsafe path, malicious clock or unexpected source authority
+causes the observer to reject input. The diagnostic is NON-BINDING to the
+original source publisher: failure emits a visible job warning but cannot
+create, overwrite or promote any source data. The original
+`publish_gate.py` remains the sole write admission boundary. The public
+source may be older, partial or delayed even if this diagnostic passes.
+
+For future affordable gap challenges, first compare the original immutable
+public HOT/COLD receipts against an independently admitted same-chain public
+RPC or explorer within its provider quotas. Such a cross-check remains
+`RESEARCH_ONLY`, with PASS/FAIL/UNKNOWN and no hindsight credit. Run it
+only on material distinct gap fingerprints, not on every 5-minute slot.
