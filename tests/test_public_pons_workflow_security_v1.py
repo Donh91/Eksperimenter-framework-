@@ -142,7 +142,8 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn("public_pons_shadow/gap_observer_v1.py", raw)
         self.assertIn("tests/test_public_pons_gap_observer_v1.py", raw)
         self.assertIn("python -m unittest tests.test_public_pons_gap_observer_v1 -v", raw)
-        self.assertEqual(raw.count("python -B public_pons_shadow/gap_observer_v1.py"), 1)
+        self.assertEqual(raw.count("python -B -m public_pons_shadow.gap_observer_v1"), 1)
+        self.assertNotIn("python -B public_pons_shadow/gap_observer_v1.py", raw)
         collect = raw.split("\n  collect:\n",1)[1].split("\n  publish:\n",1)[0]
         publish = raw.split("\n  publish:\n",1)[1]
         self.assertIn("PUBLIC_PONS_GAP_DIAGNOSTIC_FAILED_NO_SOURCE_AUTHORITY", collect)

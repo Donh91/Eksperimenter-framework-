@@ -217,7 +217,7 @@ jobs:
           PUBLIC_PONS_SCHEDULE_SLOT: ${{ github.event.schedule }}
         run: |
           set +e
-          timeout --signal=TERM --kill-after=5s 20s python -B public_pons_shadow/gap_observer_v1.py --repo-root . --result-file /tmp/pons_hot.json --run-id "$GITHUB_RUN_ID" --checkout-sha "$(git rev-parse --verify HEAD)" --event "$GITHUB_EVENT_NAME" --schedule "$PUBLIC_PONS_SCHEDULE_SLOT"
+          timeout --signal=TERM --kill-after=5s 20s python -B -m public_pons_shadow.gap_observer_v1 --repo-root . --result-file /tmp/pons_hot.json --run-id "$GITHUB_RUN_ID" --checkout-sha "$(git rev-parse --verify HEAD)" --event "$GITHUB_EVENT_NAME" --schedule "$PUBLIC_PONS_SCHEDULE_SLOT"
           rc=$?
           if [ "$rc" -ne 0 ]; then
             echo "::warning::PUBLIC_PONS_GAP_DIAGNOSTIC_FAILED_NO_SOURCE_AUTHORITY exit_code=$rc"

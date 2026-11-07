@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -30,6 +32,28 @@ class TestGapObserver(unittest.TestCase):
         return observer.diagnose(
             self.root, self.result_file, run_id=run, checkout_sha=sha,
             event=event, schedule=schedule, as_of_utc=asof or self.asof)
+
+    def test_real_python_module_cli_runs_from_repo_root(self):
+        self.capture()
+        args=[
+            sys.executable, "-B", "-m",
+            "public_pons_shadow.gap_observer_v1",
+            "--repo-root", str(self.root),
+            "--result-file", str(self.result_file),
+            "--run-id", "101",
+            "--checkout-sha", SHA,
+            "--event", "schedule",
+            "--schedule", "2,7,12,17,22,32,37,42,47,52 * * * *",
+        ]
+        run=subprocess.run(args,cwd=Path(__file__).resolve().parents[1],
+                           capture_output=True,text=True,check=False,timeout=10)
+        self.assertEqual(run.returncode,0,run.stderr)
+        self.assertTrue(run.stdout.startswith("PUBLIC_PONS_GAP_INTELLIGENCE "),run.stdout)
+        report=json.loads(run.stdout.split(" ",1)[1])
+        self.assertEqual(report["contract"],observer.CONTRACT)
+        self.assertEqual(report["status"],"BOUND_SOURCE_CAPTURE_NOT_LIVE_ADMISSION")
+        self.assertEqual(report["run_id"],"101")
+        self.assertFalse(report["github_schedule_delivery_proven"])
 
     def test_binds_real_original_receipt_without_live_credit(self):
         self.capture()
