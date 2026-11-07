@@ -144,9 +144,10 @@ jobs:
             rm -f /tmp/pons_cold.json
             echo "PUBLIC_PONS_COLD_INTENTIONALLY_SKIPPED_HOT_ONLY_SLOT"
           fi
-          # 5-minute slots capture HOT only. Forward horizons and curve probes
-          # remain on the original :27/:57 half-hour slots to avoid 6x
-          # amplification of external free-provider traffic.
+          # Extra 5-minute HOT slots remain DEX-forward-free and baseline-free.
+          # Only ALREADY FROZEN native +24H/+72H cohorts may be due-checked;
+          # the bounded observer makes ZERO RPC calls when no horizon is due.
+          # Original full forward/native baseline remains :27/:57.
           # Manual/push retain the previous full bounded behavior.
           if [[ "$GITHUB_EVENT_NAME" != "schedule" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "27 * * * *" || "$PUBLIC_PONS_SCHEDULE_SLOT" == "57 * * * *" ]]; then
             if ! (timeout --signal=TERM --kill-after=5s 35s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/forward_outcome.py --repo-root . > /tmp/pons_forward.json); then
@@ -158,8 +159,12 @@ jobs:
               echo "::warning::PUBLIC_NATIVE_CURVE_DUE_DEGRADED_NO_STATE_ADVANCE"
             fi
           else
-            rm -f /tmp/pons_forward.json /tmp/pons_curve.json
-            echo "PUBLIC_DUE_ONLY_FORWARD_CURVE_INTENTIONALLY_SKIPPED_HOT_FIVE_MINUTE_SLOT"
+            rm -f /tmp/pons_forward.json
+            echo "PUBLIC_FORWARD_INTENTIONALLY_SKIPPED_HOT_FIVE_MINUTE_SLOT"
+            if ! (timeout --signal=TERM --kill-after=5s 120s env GITHUB_CHECKOUT_SHA="$source_sha" python public_pons_shadow/curve_forward_v1.py --repo-root . --due-only > /tmp/pons_curve.json); then
+              rm -f /tmp/pons_curve.json
+              echo "::warning::PUBLIC_NATIVE_CURVE_DUE_DEGRADED_NO_STATE_ADVANCE"
+            fi
           fi
           # Research-only 30k-block historical interval, never canonical
           # source or retroactive launch credit. Existing hourly COLD slot.
