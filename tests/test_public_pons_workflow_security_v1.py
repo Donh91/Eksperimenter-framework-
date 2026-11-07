@@ -37,7 +37,7 @@ class TestPublicPonsSecurity(unittest.TestCase):
         # All 12 official UTC slots are spaced exactly 5 minutes apart.
         # Preserve original :27 COLD and :57 half-hour due-only, with no
         # duplicate schedule or new private cron/workflow.
-        crons = re.findall(r"^\\s*- cron: '([^']+)'$", raw, flags=re.MULTILINE)
+        crons = re.findall(r"^\s*- cron: '([^']+)'$", raw, flags=re.MULTILINE)
         self.assertEqual(len(crons), 3)
         self.assertIn("27 * * * *", crons)
         self.assertIn("57 * * * *", crons)
