@@ -141,8 +141,16 @@ No new scanner, workflow, identity, secret, paid API or private runner.
   immutable source receipt and independent publish gate. No canonical live/
   first-known promotion or BUY authority.
 - **Only :27:** original COLD/exhaustive and original historical recovery.
-- **Only :27 and :57:** original due-only forward outcomes and native-curve
-  research, to avoid sixfold growth in external quote/API requests.
+- **Only :27 and :57:** original DEX forward outcomes and new native-curve
+  baseline admission. On the other existing 5-minute HOT slots, run the SAME
+  bounded native observer in `--due-only` mode: it never creates a new baseline,
+  and makes zero external RPC calls unless an already-frozen +24H/+72H target is
+  due. Maximum four source samples per tick, three attempts per horizon with a
+  15-minute retry gap and four-hour late window remain unchanged.
+  This creates more opportunities to observe due source ratios near target,
+  NOT a guarantee against delayed/missing GitHub Actions delivery and NOT
+  an executable price/after-fee return. No new schedule, private Actions,
+  service, notifier, portfolio/trade authority or threshold changes.
 - **Pull request:** original full offline and workflow-security CI only, no
   network source scans or write token in PR jobs.
 - **Push and manual dispatch:** original bounded behaviors retained.

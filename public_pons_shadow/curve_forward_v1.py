@@ -112,7 +112,7 @@ def missed_snapshot(horizon,target,now):
     }
 
 
-def capture(root,run_id,checkout_sha,client=None,clock=None):
+def capture(root,run_id,checkout_sha,client=None,clock=None,due_only=False):
     if not fw.RUN_ID.fullmatch(run_id or "") or not fw.SHA.fullmatch(checkout_sha or ""):
         raise ValueError("CURVE_RUN_ID_INVALID")
     client=client or cold.Client()
@@ -150,7 +150,7 @@ def capture(root,run_id,checkout_sha,client=None,clock=None):
                 continue  # Try cap exhausted; preserve UNKNOWN until window expires.
             elif not attempts or start-fw.parse_utc(attempts[-1]["observed_at_utc"])>=RETRY_AFTER:
                 plans.append(("DUE",c,label,target))
-    if source and new_today<MAX_NEW_DAILY and len(candidates)<MAX_TRACKED:
+    if source and not due_only and new_today<MAX_NEW_DAILY and len(candidates)<MAX_TRACKED:
         known={c["id"] for c in candidates}
         for public in source["candidates"]:
             if public["id"] in known:continue
@@ -263,13 +263,14 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--repo-root",type=Path,default=Path("."))
     ap.add_argument("--validate-only",action="store_true")
+    ap.add_argument("--due-only",action="store_true",help="On extra HOT slots, mature existing horizons only; never open new baselines")
     args=ap.parse_args()
     if args.validate_only:
         assert MAX_NEW_DAILY==2 and MAX_SAMPLES_PER_TICK==4
         print("PUBLIC_NATIVE_DUE_RESEARCH_ONLY_POLICY_PASS")
     else:
         print(json.dumps(capture(args.repo_root.resolve(),os.getenv("GITHUB_RUN_ID",""),
-                                 os.getenv("GITHUB_CHECKOUT_SHA","")),sort_keys=True))
+                                 os.getenv("GITHUB_CHECKOUT_SHA",""),due_only=args.due_only),sort_keys=True))
 
 
 if __name__=="__main__":

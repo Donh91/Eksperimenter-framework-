@@ -34,9 +34,9 @@ class TestPublicNativeDue(unittest.TestCase):
         shutil.copyfile(state,target)
         self.native_t0=NOW+timedelta(minutes=2)
 
-    def capture(self,when,runid,client=None):
+    def capture(self,when,runid,client=None,due_only=False):
         return curve.capture(self.source,runid,SHA,client=client or FakeClient(),
-                             clock=lambda:when)
+                             clock=lambda:when,due_only=due_only)
 
     def st(self):
         return json.loads((self.source/curve.STATE).read_text())
@@ -85,6 +85,30 @@ class TestPublicNativeDue(unittest.TestCase):
         self.assertEqual((self.published/"public_pons_shadow/forward_state.json").read_bytes(),raw)
         self.assertEqual(self.capture(self.native_t0+timedelta(minutes=10),"102")["status"],
                          "NO_NATIVE_OBSERVATIONS_DUE")
+
+    def test_five_minute_due_only_never_opens_baseline_and_only_reads_at_due(self):
+        # Simulates extra :02/:07/... HOT slots without another scanner or issuer.
+        client=FakeClient()
+        result=self.capture(self.native_t0,"100",client,due_only=True)
+        self.assertEqual(result["status"],"NO_NATIVE_OBSERVATIONS_DUE")
+        self.assertEqual(client.calls,[])
+        self.assertFalse((self.source/curve.STATE).exists())
+        self.baseline()
+        target=self.native_t0+timedelta(hours=24)
+        early_client=FakeClient()
+        self.assertEqual(self.capture(target-timedelta(minutes=1),"102",early_client,due_only=True)["status"],
+                         "NO_NATIVE_OBSERVATIONS_DUE")
+        self.assertEqual(early_client.calls,[])
+        out=self.capture(target+timedelta(minutes=7),"103",due_only=True)
+        self.assertEqual(out["source_calls"],2)
+        self.publish(out)
+        state=self.st()
+        self.assertEqual(len(state["candidates"]),2)
+        for c in state["candidates"]:
+            self.assertEqual(len(c["observations"]["24H"]),1)
+            self.assertEqual(c["observations"]["24H"][0]["status"],"NATIVE_CURVE_PROXY_CAPTURED")
+            self.assertEqual(c["observations"]["72H"],[])
+            self.assertFalse(c["execution_verified"])
 
     def test_24h_72h_due_chain_and_frozen_blocked_clock(self):
         self.baseline()
