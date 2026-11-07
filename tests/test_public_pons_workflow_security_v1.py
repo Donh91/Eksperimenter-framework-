@@ -137,6 +137,27 @@ class TestPublicPonsSecurity(unittest.TestCase):
         self.assertIn("rm -f /tmp/pons_cold.json",raw)
         self.assertIn("rm -f /tmp/pons_hot.json",raw)
 
+    def test_gap_observer_is_read_only_in_existing_collect_runner(self):
+        raw = WORKFLOW.read_text()
+        self.assertIn("public_pons_shadow/gap_observer_v1.py", raw)
+        self.assertIn("tests/test_public_pons_gap_observer_v1.py", raw)
+        self.assertIn("python -m unittest tests.test_public_pons_gap_observer_v1 -v", raw)
+        self.assertEqual(raw.count("python -B public_pons_shadow/gap_observer_v1.py"), 1)
+        collect = raw.split("\n  collect:\n",1)[1].split("\n  publish:\n",1)[0]
+        publish = raw.split("\n  publish:\n",1)[1]
+        self.assertIn("PUBLIC_PONS_GAP_DIAGNOSTIC_FAILED_NO_SOURCE_AUTHORITY", collect)
+        self.assertIn("PUBLIC_PONS_SCHEDULE_SLOT: ${{ github.event.schedule }}", collect)
+        self.assertIn("--run-id \"$GITHUB_RUN_ID\"", collect)
+        self.assertIn("--checkout-sha \"$(git rev-parse --verify HEAD)\"", collect)
+        self.assertNotIn("gap_observer_v1.py", publish)
+        self.assertNotIn("contents: write", collect)
+        self.assertNotIn("upload-artifact",collect.split("      - name: Bounded read-only HOT gap intelligence summary, log only",1)[1].split("      - name: Native Pons V2",1)[0])
+        self.assertEqual(raw.count("contents: write"), 1)
+        self.assertEqual(raw.count("  schedule:\n"), 1)
+        self.assertNotIn("repository_dispatch:", raw)
+        self.assertNotIn("OPENAI_API_KEY", raw)
+        self.assertNotIn("Donh91/secrets", raw)
+
     def stage_hot(self,base):
         root=base/"source"
         root.mkdir()
