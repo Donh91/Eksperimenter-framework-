@@ -10,6 +10,7 @@ on:
       - '.github/workflows/public-pons-shadow.yml'
       - 'public_pons_shadow/collector.py'
       - 'public_pons_shadow/hot_collector.py'
+      - 'public_pons_shadow/gap_observer_v1.py'
       - 'public_pons_shadow/publish_gate.py'
       - 'public_pons_shadow/forward_outcome.py'
       - 'public_pons_shadow/forward_gate.py'
@@ -38,6 +39,7 @@ on:
       - 'public_pons_shadow/publish_gate.py'
       - 'tests/test_public_pons_shadow.py'
       - 'tests/test_public_pons_hot.py'
+      - 'tests/test_public_pons_gap_observer_v1.py'
       - 'tests/test_public_pons_workflow_security_v1.py'
       - 'public_pons_shadow/forward_outcome.py'
       - 'public_pons_shadow/forward_gate.py'
@@ -83,6 +85,8 @@ jobs:
       - name: Execute old source controls, new HOT controls, and workflow security regression
         run: |
           python -m py_compile public_pons_shadow/collector.py public_pons_shadow/hot_collector.py public_pons_shadow/publish_gate.py public_pons_shadow/forward_outcome.py public_pons_shadow/forward_gate.py public_pons_shadow/native_curve_diagnostic_v1.py public_pons_shadow/curve_forward_v1.py public_pons_shadow/curve_forward_gate_v1.py public_pons_shadow/coverage_custody_v1.py public_pons_shadow/historical_custody_v1.py public_pons_shadow/v2_quote_math_research_v1.py public_pons_shadow/historical_recovery_v1.py public_pons_shadow/v2_sell_phase_probe_v1.py
+          python -m py_compile public_pons_shadow/gap_observer_v1.py
+          python -m unittest tests.test_public_pons_gap_observer_v1 -v
           python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_v2_sell_phase_probe_v1 tests.test_public_pons_historical_recovery_v1 tests.test_public_pons_workflow_security_v1 -v
 
   collect:
@@ -112,6 +116,10 @@ jobs:
           python public_pons_shadow/curve_forward_v1.py --validate-only
           python public_pons_shadow/historical_recovery_v1.py --validate-only
           python -m unittest tests.test_public_pons_shadow tests.test_public_pons_hot tests.test_public_pons_forward_outcome tests.test_public_pons_forward_gate tests.test_public_pons_native_curve_diagnostic_v1 tests.test_public_pons_curve_forward_v1 tests.test_public_pons_coverage_custody_v1 tests.test_public_pons_v2_quote_math_research_v1 tests.test_public_pons_v2_sell_phase_probe_v1 tests.test_public_pons_historical_recovery_v1 -v
+      - name: Validate public HOT gap observer at source runner, no network calls
+        run: |
+          python -m py_compile public_pons_shadow/gap_observer_v1.py
+          python -m unittest tests.test_public_pons_gap_observer_v1 -v
       - name: Independently capture HOT then hourly COLD, degrade visibly on provider failures
         id: stage
         shell: bash
@@ -203,6 +211,18 @@ jobs:
           if not any_valid:raise RuntimeError('BOTH_PUBLIC_PONS_LANES_FAILED')
           print('PUBLIC_PONS_CAPTURE_RESULT HOT_COLD_FORWARD_CURVE_HISTORICAL_INDEPENDENT has_data='+str(any_data))
           PY
+      - name: Bounded read-only HOT gap intelligence summary, log only
+        shell: bash
+        env:
+          PUBLIC_PONS_SCHEDULE_SLOT: ${{ github.event.schedule }}
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 20s python -B public_pons_shadow/gap_observer_v1.py --repo-root . --result-file /tmp/pons_hot.json --run-id "$GITHUB_RUN_ID" --checkout-sha "$(git rev-parse --verify HEAD)" --event "$GITHUB_EVENT_NAME" --schedule "$PUBLIC_PONS_SCHEDULE_SLOT"
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning::PUBLIC_PONS_GAP_DIAGNOSTIC_FAILED_NO_SOURCE_AUTHORITY exit_code=$rc"
+          fi
+          exit 0
       - name: Native Pons V2 reserve proxy, push-only research diagnostic
         if: github.event_name == 'push'
         shell: bash
