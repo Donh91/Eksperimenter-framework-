@@ -221,9 +221,19 @@ def main() -> None:
             receipt_path.write_bytes(canonical(receipt))
             processed += 1
 
+    # The receipt manifest lists only receipts for requests in the CURRENT dispatch manifest.
+    # Archive lists pending (unreceipted) requests only and imports each receipt once
+    # (sync_experiment_receipts skips receipts it already holds), so this closes the loop with a
+    # bounded list. Every receipt file stays immutable on disk. Listing all receipts had grown
+    # this file to 30.6 MB (65,595 receipts) by 2026-11-14.
+    current_request_ids = {str(item.get("request_id")) for item in manifest.get("requests", []) if isinstance(item, dict)}
     receipts = []
+    receipt_files_on_disk = 0
     for path in sorted(args.receipt_root.glob("*.json")):
         value = json.loads(path.read_text(encoding="utf-8"))
+        receipt_files_on_disk += 1
+        if str(value.get("request_id")) not in current_request_ids:
+            continue
         rel = str(path)
         receipts.append({
             "receipt_id": value["receipt_id"],
@@ -234,7 +244,8 @@ def main() -> None:
             "replication_status": value["replication_status"],
             "verification_scope": value.get("verification_scope", "LEGACY_UNSPECIFIED"),
         })
-    output = {"contract": "EXPERIMENT_EXECUTION_RECEIPT_MANIFEST_v1", "generated_at_utc": now_iso(), "receipt_count": len(receipts), "receipts": receipts, "authority": "SHADOW_ONLY"}
+    output = {"contract": "EXPERIMENT_EXECUTION_RECEIPT_MANIFEST_v1", "generated_at_utc": now_iso(), "receipt_count": len(receipts), "receipts": receipts, "authority": "SHADOW_ONLY",
+              "listing_rule": "RECEIPTS_FOR_CURRENT_DISPATCH_REQUESTS_ONLY", "receipt_files_on_disk": receipt_files_on_disk}
     args.manifest_output.parent.mkdir(parents=True, exist_ok=True)
     args.manifest_output.write_bytes(canonical(output))
     state = {
@@ -246,7 +257,8 @@ def main() -> None:
         "cached_request_count": cached_requests,
         "fetched_request_count": fetched_requests,
         "new_receipt_count": processed,
-        "total_receipt_count": len(receipts),
+        "total_receipt_count": receipt_files_on_disk,
+        "listed_receipt_count": len(receipts),
         "replication_mismatch_count": mismatches,
         "replication_unverified_count": unverified,
         "component_recompute_count": component_recomputes,
