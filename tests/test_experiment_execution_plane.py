@@ -157,6 +157,43 @@ class ExecutionPlaneTest(unittest.TestCase):
             self.assertEqual(state["fetched_request_count"], 0)
             self.assertEqual(state["new_receipt_count"], 0)
 
+    def test_receipt_manifest_lists_only_receipts_for_current_dispatch_requests(self):
+        """Archive #2152 follow-up: the receipt manifest must stay bounded (it was 30.6 MB)."""
+        current = self.request("OBSERVED_NOT_FIRED", [
+            {"operator": "GT", "latest": 40, "previous": 45, "threshold": 50, "delta_pct": -11.1, "matched": False},
+        ], request_id="ER-current")
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            target = Path(td) / "target"
+            receipts = target / "experiment_bridge/receipts"
+            receipts.mkdir(parents=True)
+            old = {"contract": "EXPERIMENT_EXECUTION_RECEIPT_v1", "receipt_id": "XR-old", "request_id": "ER-old",
+                   "candidate_id": "EC-test", "replication_status": "REPLICATED_FIRED"}
+            (receipts / "XR-old.json").write_text(json.dumps(old))
+            req_path = source / "research/experiment_lifecycle/dispatch/2026/11/14/ER-current.json"
+            req_path.parent.mkdir(parents=True)
+            req_path.write_text(json.dumps(current))
+            manifest = {"contract": "EXPERIMENT_DISPATCH_MANIFEST_v1", "requests": [{
+                "request_id": "ER-current", "candidate_id": "EC-test", "path": str(req_path.relative_to(source)),
+                "sha256": sha(current), "raw_url": "unused"}]}
+            manifest_path = source / "research/experiment_lifecycle/LATEST_EXPERIMENT_DISPATCH_MANIFEST.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            manifest_path.write_text(json.dumps(manifest))
+            subprocess.run([
+                sys.executable, str(SCRIPT), "--manifest-file", str(manifest_path), "--source-root", str(source),
+                "--request-root", str(target / "experiment_bridge/requests"), "--receipt-root", str(receipts),
+                "--manifest-output", str(target / "experiment_bridge/LATEST_EXECUTION_RECEIPT_MANIFEST.json"),
+                "--state-output", str(target / "experiment_bridge/state.json"),
+            ], check=True)
+            out = json.loads((target / "experiment_bridge/LATEST_EXECUTION_RECEIPT_MANIFEST.json").read_text())
+            state = json.loads((target / "experiment_bridge/state.json").read_text())
+            self.assertEqual(out["contract"], "EXPERIMENT_EXECUTION_RECEIPT_MANIFEST_v1")  # Archive sync contract unchanged
+            self.assertEqual([r["receipt_id"] for r in out["receipts"]],
+                             [p.stem for p in receipts.glob("*.json") if p.stem != "XR-old"])
+            self.assertEqual(out["receipt_files_on_disk"], 2)
+            self.assertTrue((receipts / "XR-old.json").exists())  # history stays on disk
+            self.assertEqual((state["total_receipt_count"], state["listed_receipt_count"]), (2, 1))
+
 
 if __name__ == "__main__":
     unittest.main()

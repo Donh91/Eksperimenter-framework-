@@ -6,17 +6,12 @@ import hashlib
 import json
 import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 UTC = timezone.utc
 MANIFEST_V1 = "EXPERIMENT_DISPATCH_MANIFEST_v1"
 MANIFEST_V2 = "EXPERIMENT_DISPATCH_MANIFEST_v2_SCIENTIFIC_ADMISSION"
-MANIFEST_V3 = "EXPERIMENT_DISPATCH_MANIFEST_v3_PAGED_SCIENTIFIC_ADMISSION"
-PAGE_V3 = "EXPERIMENT_DISPATCH_PAGE_v3"
-MAX_PAGE_BYTES = 2_000_000
-MAX_PAGE_REQUESTS = 1_024
-MAX_MANIFEST_PAGES = 1_024
 QUALIFIED = "QUALIFIED_FOR_FORWARD_TEST"
 
 EMBEDDED_RECOMPUTE = "COMPONENT_RECOMPUTE_EMBEDDED_OBSERVATION"
@@ -49,105 +44,6 @@ def load_source(url: str | None, path: Path | None) -> dict[str, Any]:
 def fetch_json(url: str) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=60) as response:
         return json.loads(response.read())
-
-
-def valid_digest(digest: Any) -> bool:
-    return isinstance(digest, str) and len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
-
-
-def expand_manifest_requests(
-    manifest: dict[str, Any], *, manifest_file: Path | None, source_root: Path | None
-) -> list[dict[str, Any]]:
-    """Verify complete v3 pages BEFORE request or receipt state is mutated.
-
-    V1/v2 remain unchanged and are deliberately not reinterpreted as v3 pages.
-    """
-    contract = manifest.get("contract")
-    if contract in {MANIFEST_V1, MANIFEST_V2}:
-        rows = manifest.get("requests", [])
-        if not isinstance(rows, list):
-            raise SystemExit("legacy_manifest_requests_invalid")
-        return rows
-    if contract != MANIFEST_V3:
-        raise SystemExit("invalid_dispatch_manifest_contract")
-    if manifest.get("admission_required") != QUALIFIED:
-        raise SystemExit("invalid_scientific_admission_requirement")
-    source_repo = manifest.get("source_repository")
-    source_branch = manifest.get("source_branch")
-    if source_repo != "Donh91/Investering-Framework-Archive-v1" or source_branch != "main":
-        raise SystemExit("v3_untrusted_source_identity")
-    pages = manifest.get("pages")
-    count = manifest.get("request_count")
-    if (not isinstance(pages, list) or len(pages) > MAX_MANIFEST_PAGES
-            or type(count) is not int or count < 0 or count > MAX_MANIFEST_PAGES * MAX_PAGE_REQUESTS
-            or (count > 0 and not pages) or (count == 0 and pages)):
-        raise SystemExit("v3_manifest_index_invalid")
-    combined: list[dict[str, Any]] = []
-    previous_id = ""
-    paths: set[str] = set()
-    for sequence, item in enumerate(pages):
-        if not isinstance(item, dict):
-            raise SystemExit("v3_page_metadata_invalid")
-        rel = item.get("path")
-        declared = item.get("sha256")
-        expected_count = item.get("request_count")
-        if (not isinstance(rel, str) or not rel.startswith("research/experiment_lifecycle/dispatch_manifest_pages/")
-                or any(part in {"", ".", ".."} for part in rel.split("/"))
-                or PurePosixPath(rel).is_absolute() or rel in paths
-                or not valid_digest(declared)
-                or type(expected_count) is not int or not 1 <= expected_count <= MAX_PAGE_REQUESTS
-                or item.get("sequence") != sequence):
-            raise SystemExit("v3_page_metadata_invalid")
-        paths.add(rel)
-        url = f"https://raw.githubusercontent.com/{source_repo}/{source_branch}/{rel}"
-        if item.get("raw_url") != url:
-            raise SystemExit("v3_page_url_mismatch")
-        if manifest_file is None:
-            with urllib.request.urlopen(url, timeout=60) as response:
-                data = response.read(MAX_PAGE_BYTES + 1)
-        else:
-            root = source_root or manifest_file.parent
-            target = (root / rel).resolve()
-            if not target.is_relative_to(root.resolve()):
-                raise SystemExit("v3_page_path_escape")
-            data = target.read_bytes()
-        if len(data) > MAX_PAGE_BYTES or hashlib.sha256(data).hexdigest() != declared:
-            raise SystemExit("v3_page_digest_or_size_mismatch")
-        try:
-            page = json.loads(data)
-        except (ValueError, UnicodeError) as exc:
-            raise SystemExit("v3_page_invalid_json") from exc
-        if (not isinstance(page, dict) or page.get("contract") != PAGE_V3
-                or page.get("sequence") != sequence
-                or page.get("request_count") != expected_count
-                or not isinstance(page.get("requests"), list)
-                or len(page["requests"]) != expected_count
-                or canonical(page) != data):
-            raise SystemExit("v3_page_contract_or_count_mismatch")
-        first_id = None
-        for entry in page["requests"]:
-            if not isinstance(entry, dict):
-                raise SystemExit("v3_request_index_invalid")
-            request_id = entry.get("request_id")
-            if (not isinstance(request_id, str) or not request_id.startswith("ER-")
-                    or len(request_id) > 128
-                    or any(not (ch.isascii() and (ch.isalnum() or ch in "_-")) for ch in request_id)
-                    or not valid_digest(entry.get("sha256"))
-                    or not isinstance(entry.get("candidate_id"), str)
-                    or not isinstance(entry.get("path"), str)
-                    or not isinstance(entry.get("raw_url"), str)):
-                raise SystemExit("v3_request_index_invalid")
-            if request_id <= previous_id:
-                raise SystemExit("v3_duplicate_or_unsorted_request_id")
-            if first_id is None:
-                first_id = request_id
-            previous_id = request_id
-        if item.get("first_request_id") != first_id or item.get("last_request_id") != previous_id:
-            raise SystemExit("v3_page_bounds_mismatch")
-        combined.extend(page["requests"])
-    if len(combined) != count:
-        raise SystemExit("v3_manifest_total_count_mismatch")
-    return combined
 
 
 def recompute_row(row: dict[str, Any]) -> bool | None:
@@ -212,9 +108,9 @@ def recompute_status(request: dict[str, Any]) -> tuple[str, str, str]:
 
 def validate_manifest_and_request(manifest: dict[str, Any], request: dict[str, Any]) -> None:
     contract = manifest.get("contract")
-    if contract not in {MANIFEST_V1, MANIFEST_V2, MANIFEST_V3}:
+    if contract not in {MANIFEST_V1, MANIFEST_V2}:
         raise SystemExit("invalid_dispatch_manifest_contract")
-    if contract in {MANIFEST_V2, MANIFEST_V3}:
+    if contract == MANIFEST_V2:
         if manifest.get("admission_required") != QUALIFIED:
             raise SystemExit("invalid_scientific_admission_requirement")
         if request.get("scientific_admission_status") != QUALIFIED:
@@ -237,19 +133,14 @@ def main() -> None:
     args = ap.parse_args()
 
     manifest = load_source(args.manifest_url, args.manifest_file)
-    if manifest.get("contract") not in {MANIFEST_V1, MANIFEST_V2, MANIFEST_V3}:
+    if manifest.get("contract") not in {MANIFEST_V1, MANIFEST_V2}:
         raise SystemExit("invalid_dispatch_manifest_contract")
-    if manifest.get("contract") in {MANIFEST_V2, MANIFEST_V3} and manifest.get("admission_required") != QUALIFIED:
+    if manifest.get("contract") == MANIFEST_V2 and manifest.get("admission_required") != QUALIFIED:
         raise SystemExit("invalid_scientific_admission_requirement")
-    # All pages, hashes, counts and deterministic order must be accepted before
-    # writing even the first local request or receipt.
-    source_requests = expand_manifest_requests(
-        manifest, manifest_file=args.manifest_file, source_root=args.source_root
-    )
 
     processed = mismatches = unverified = component_recomputes = 0
     cached_requests = fetched_requests = 0
-    for item in source_requests:
+    for item in manifest.get("requests", []):
         request_id = item.get("request_id")
         if not isinstance(request_id, str) or not request_id:
             raise SystemExit("manifest_request_id_missing")
@@ -330,9 +221,19 @@ def main() -> None:
             receipt_path.write_bytes(canonical(receipt))
             processed += 1
 
+    # The receipt manifest lists only receipts for requests in the CURRENT dispatch manifest.
+    # Archive lists pending (unreceipted) requests only and imports each receipt once
+    # (sync_experiment_receipts skips receipts it already holds), so this closes the loop with a
+    # bounded list. Every receipt file stays immutable on disk. Listing all receipts had grown
+    # this file to 30.6 MB (65,595 receipts) by 2026-11-14.
+    current_request_ids = {str(item.get("request_id")) for item in manifest.get("requests", []) if isinstance(item, dict)}
     receipts = []
+    receipt_files_on_disk = 0
     for path in sorted(args.receipt_root.glob("*.json")):
         value = json.loads(path.read_text(encoding="utf-8"))
+        receipt_files_on_disk += 1
+        if str(value.get("request_id")) not in current_request_ids:
+            continue
         rel = str(path)
         receipts.append({
             "receipt_id": value["receipt_id"],
@@ -343,19 +244,21 @@ def main() -> None:
             "replication_status": value["replication_status"],
             "verification_scope": value.get("verification_scope", "LEGACY_UNSPECIFIED"),
         })
-    output = {"contract": "EXPERIMENT_EXECUTION_RECEIPT_MANIFEST_v1", "generated_at_utc": now_iso(), "receipt_count": len(receipts), "receipts": receipts, "authority": "SHADOW_ONLY"}
+    output = {"contract": "EXPERIMENT_EXECUTION_RECEIPT_MANIFEST_v1", "generated_at_utc": now_iso(), "receipt_count": len(receipts), "receipts": receipts, "authority": "SHADOW_ONLY",
+              "listing_rule": "RECEIPTS_FOR_CURRENT_DISPATCH_REQUESTS_ONLY", "receipt_files_on_disk": receipt_files_on_disk}
     args.manifest_output.parent.mkdir(parents=True, exist_ok=True)
     args.manifest_output.write_bytes(canonical(output))
     state = {
         "contract": "EXPERIMENT_EXECUTION_PLANE_STATE_v1",
         "updated_at_utc": output["generated_at_utc"],
         "source_manifest_contract": manifest.get("contract"),
-        "scientific_admission_enforced": manifest.get("contract") in {MANIFEST_V2, MANIFEST_V3},
-        "dispatch_request_count": len(source_requests),
+        "scientific_admission_enforced": manifest.get("contract") == MANIFEST_V2,
+        "dispatch_request_count": len(manifest.get("requests", [])),
         "cached_request_count": cached_requests,
         "fetched_request_count": fetched_requests,
         "new_receipt_count": processed,
-        "total_receipt_count": len(receipts),
+        "total_receipt_count": receipt_files_on_disk,
+        "listed_receipt_count": len(receipts),
         "replication_mismatch_count": mismatches,
         "replication_unverified_count": unverified,
         "component_recompute_count": component_recomputes,
